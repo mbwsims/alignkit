@@ -17,7 +17,7 @@ Lint is the trust anchor. It works on any instruction file, requires no session 
 - `agentlint watch` — background daemon that monitors sessions and populates history
 - `agentlint status` — quick adherence pulse check from history
 - `agentlint report` — trend analysis with recommendations from history
-- `agentlint optimize` — generate improved instruction file from adherence data
+- `agentlint optimize` — recommend improvements to instruction files from adherence data
 
 These features are gated on the session ingestion milestone (see below). They report adherence as evidence with explicit confidence levels, not ground truth. All output includes the verification method and sample size so users can judge the strength of each data point.
 
@@ -48,10 +48,13 @@ Tier 2 features do not ship until step 3 passes.
 **Claude Code versions:** Tested against the Claude Code version current at time of development. The session reader includes a format version check and fails clearly if the log format is unrecognized rather than producing wrong results.
 
 **Instruction file discovery:**
-- Auto-discovery order: `CLAUDE.md` > `.cursorrules` > `AGENTS.md` > `.cursor/rules`
-- v1 discovers and analyzes the primary instruction file only
-- When multiple files exist (root + nested CLAUDE.md, AGENTS.md), each is analyzed independently if explicitly targeted (`agentlint lint ./src/CLAUDE.md`)
-- No "effective rules" merging across files in v1 — this requires real user feedback on what "merged" means to them
+All commands scan the project tree for instruction files on every run:
+- Searches for: `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `.cursor/rules` at the repo root and in subdirectories
+- Reports what it finds: "Found 3 instruction files: ./CLAUDE.md (root, 47 rules), ./src/api/CLAUDE.md (12 rules), ./AGENTS.md (8 rules)"
+- By default, analyzes the root-level file (priority: `CLAUDE.md` > `.cursorrules` > `AGENTS.md` > `.cursor/rules`)
+- Target a specific file with `agentlint lint ./src/api/CLAUDE.md`
+- Target all discovered files with `agentlint lint --all` (analyzes each independently, combined report)
+- No "effective rules" merging across files in v1 — each file is analyzed in isolation. Merging requires real user feedback on what the "effective policy" means across layers
 
 **Monorepo behavior:**
 - Each project directory maps to its own Claude Code session history
@@ -165,6 +168,9 @@ type Observation =
       relevant: false;
       method: VerificationMethod;
       confidence: ObservationConfidence;
+      // Human-readable evidence string for --verbose output.
+      // e.g., "no package manager commands found in session"
+      evidence: string;
     }
   | {
       ruleId: string;
@@ -173,6 +179,9 @@ type Observation =
       followed: boolean | null; // null = relevant but couldn't determine
       method: VerificationMethod;
       confidence: ObservationConfidence;
+      // Human-readable evidence string for --verbose output.
+      // e.g., "saw `pnpm install` at 03:14, no `npm` commands found"
+      evidence: string;
     };
 
 type VerificationMethod =
@@ -637,9 +646,51 @@ Found 2 sessions since last CLAUDE.md change.
  "Create a branch before changes"        2/2       0/2         0% ✗
 ```
 
+**Inspectable evidence (`--verbose`):**
+```
+$ agentlint check --verbose
+
+ "Use pnpm, not npm"  100% ✓  high  auto:bash-keyword
+   Session abc123: ✓ saw `pnpm install` at 03:14, no `npm` commands found
+   Session def456: ✓ saw `pnpm add react` at 03:47, no `npm` commands found
+   ...
+
+ "Run tests before committing"  86% ✓  medium  auto:bash-sequence
+   Session abc123: ✓ `pnpm test` at 03:20 → `git commit` at 03:22
+   Session def456: ✗ `git commit` at 03:50, no test command found before
+   ...
+```
+
+Every verdict is backed by specific evidence from the session. Without `--verbose`, the summary table is shown. With `--verbose`, the evidence chain is printed per-rule per-session so users can verify the tool's reasoning.
+
 **Flags:**
 - `--fresh` — re-parse all sessions (ignores history cache, useful after engine updates)
+- `--verbose` — show per-session evidence for each verdict
 - `--format <format>` — terminal, json, markdown
+
+### `agentlint feedback`
+
+Lightweight correction mechanism. When a verdict is wrong, the user can flag it:
+
+```
+$ agentlint feedback use-pnpm-not-npm --incorrect --session abc123
+Recorded: "use-pnpm-not-npm" marked incorrect for session abc123.
+Feedback saved to .agentlint/feedback.jsonl
+```
+
+Feedback is stored in `.agentlint/feedback.jsonl`:
+```jsonl
+{"ruleSlug":"use-pnpm-not-npm","sessionId":"abc123","correct":false,"timestamp":"2026-03-27T15:00:00Z"}
+```
+
+**How feedback is used:**
+- `report` surfaces rules with high disagreement: "3 verdicts flagged as incorrect for 'use-pnpm-not-npm' — verifier may need tuning"
+- Over time, feedback accumulates into a benchmark corpus for calibrating verifier accuracy
+- In v1, feedback is informational only — it does not change historical verdicts. In v2+, feedback can trigger re-analysis with adjusted verifier logic.
+
+**Flags:**
+- `--correct` / `--incorrect` — mark the most recent verdict for this rule
+- `--session <id>` — target a specific session (optional, defaults to most recent)
 
 ### `agentlint watch`
 
@@ -709,7 +760,7 @@ RECOMMENDATIONS:
 
 ### `agentlint optimize [file]`
 
-Generate an improved instruction file from adherence data. **Conservative by default — no rules are deleted unless explicitly requested.**
+Recommend improvements to instruction files based on adherence data. **Default output is a recommendations report, not a rewritten file.** Optimize is a recommender — it tells you what to change and why, and you decide what to act on.
 
 ```
 $ agentlint optimize
@@ -717,34 +768,49 @@ $ agentlint optimize
 Auto-detected: ./CLAUDE.md
 Using adherence data from 14 sessions...
 
-Step 1 — Deduplicate:      Merged 3 near-duplicate rule pairs (saves 180 tokens)
-Step 2 — Reorder:          Moved top-performing rules to top of each section
-Step 3 — Flag for review:  5 rules need attention (3 consistently violated, 2 never observed)
+OPTIMIZATION RECOMMENDATIONS:
 
-RESULT:
-  Before: 47 rules, 3,200 tokens
-  After:  44 rules, 3,020 tokens
-  Merged: 3 near-duplicate pairs
-  Flagged: 5 rules for review
+ DEDUPLICATE (saves ~180 tokens):
+   Rules 15 + 29 are near-duplicates. Keep Rule 15 (higher adherence: 73% vs 61%).
+   Rules 8 + 31 are near-duplicates. Keep Rule 8 (higher adherence: 90% vs 85%).
+   Rules 22 + 44 are near-duplicates. Keep Rule 22 (higher adherence: 100% vs 95%).
 
-  Output: CLAUDE.optimized.md
-  Review: agentlint-diff.md (explains every change)
+ REORDER:
+   15 high-adherence rules appear after line 100. Moving them earlier
+   increases the chance they stay in the agent's attention window.
+
+ REVIEW THESE RULES:
+   ✗ "Add JSDoc to public functions"       — 12% adherence across 14 sessions.
+     Consider rephrasing to be more specific, or removing (saves ~40 tokens).
+   ✗ "Create a feature branch"             — 14% adherence across 14 sessions.
+     Consider rephrasing with explicit command: "Run git checkout -b feature/<name>".
+   ? "Run security audit before deploy"    — never observed in 14 sessions.
+     May be relevant for rare workflows. Verify this rule is still needed.
+   ? "Use database migrations for schema"  — never observed in 14 sessions.
+     May be relevant for rare workflows. Verify this rule is still needed.
+   ? "Follow incident response checklist"  — never observed in 14 sessions.
+     May be relevant for rare workflows. Verify this rule is still needed.
+
+ SUMMARY:
+   47 rules, ~3,200 tokens
+   Potential savings: ~180 tokens from deduplication
+   5 rules flagged for review (3 low adherence, 2 never observed)
+
+ To generate an optimized file: agentlint optimize --write
+ To export as markdown:         agentlint optimize --format markdown
 ```
 
-**Steps (default):**
-1. **Deduplicate:** Merge near-duplicate rules (Jaccard >0.6) — keep the one with higher adherence.
+**Default behavior:** Print recommendations. No files written. The user reads, decides, and edits their instruction file themselves — or uses `--write` to generate an optimized version.
+
+**With `--write`:**
+Applies the recommendations and writes `CLAUDE.optimized.md` (never modifies original) plus `agentlint-diff.md` (prose changelog explaining each change). Steps applied:
+1. **Deduplicate:** Merge near-duplicate rules — keep the one with higher adherence.
 2. **Reorder:** Within each markdown section, move highest-adherence rules to the top.
-3. **Flag for review:** Rules with <20% adherence or zero relevance are listed in `agentlint-diff.md` with recommendations ("rephrase", "reinforce", "consider removing"). No inline annotations in the output file — the optimized file is clean.
+3. Low-adherence and unobserved rules are kept but listed in the diff file. No deletion, no inline annotations.
 
-**What optimize does NOT do by default:**
-- Delete rules. "Never observed" could mean the rule is for rare but critical scenarios (deployments, incidents, migrations, security).
-- Insert comments or annotations into the output file. All rationale goes in `agentlint-diff.md`.
+**With `--write --prune`:** Also removes rules that were never relevant in any analyzed session. Use with caution.
 
-**With `--prune`:** Removes rules that were never relevant in any analyzed session. Use with caution.
-
-**With `--deep`:** Adds LLM consolidation step between Deduplicate and Reorder.
-
-**Output:** Always writes `CLAUDE.optimized.md` (never modifies original) and `agentlint-diff.md` (prose changelog, changes attributed by step name).
+**With `--write --deep`:** Adds LLM consolidation step (merge related rule groups into fewer, stronger rules).
 
 ---
 
@@ -795,6 +861,7 @@ agentlint/
 │   │   ├── index.ts              # Entry, command routing
 │   │   ├── lint.ts
 │   │   ├── check.ts
+│   │   ├── feedback.ts
 │   │   ├── optimize.ts
 │   │   ├── watch.ts
 │   │   ├── status.ts
@@ -836,14 +903,15 @@ agentlint/
 │   │
 │   ├── history/
 │   │   ├── types.ts
-│   │   └── store.ts
+│   │   ├── store.ts
+│   │   └── feedback.ts          # User corrections (.agentlint/feedback.jsonl)
 │   │
 │   ├── optimizer/
-│   │   ├── deduplicator.ts
-│   │   ├── reorderer.ts
-│   │   ├── flagger.ts
-│   │   ├── consolidator.ts
-│   │   └── diff-writer.ts
+│   │   ├── recommender.ts        # Default: print recommendations
+│   │   ├── deduplicator.ts       # --write: merge near-duplicates
+│   │   ├── reorderer.ts          # --write: reorder by adherence
+│   │   ├── consolidator.ts       # --write --deep: LLM merging
+│   │   └── diff-writer.ts        # --write: prose changelog
 │   │
 │   └── reporters/
 │       ├── terminal.ts
@@ -889,7 +957,9 @@ Undocumented format could change. Mitigation: defensive parsing, integration tes
 Mitigation: session ingestion is gated — no Tier 2 features ship until fixtures are captured and schema is confirmed.
 
 **Heuristic verifier accuracy.**
-Regex-based code structure checks will produce false positives/negatives. Mitigation: every observation carries a confidence level. Medium-confidence results are clearly labeled. Users can override with custom checks or llm-judge.
+Regex-based code structure checks will produce false positives/negatives. Mitigation: every observation carries a confidence level and an evidence string. Medium-confidence results are clearly labeled. Users can override with custom checks or llm-judge. The `agentlint feedback` command lets users flag wrong verdicts, building a correction corpus over time.
+
+**Future: verifier calibration (post-v1).** Once we have enough feedback data and captured fixtures, build a gold-standard benchmark set: 30-50 representative rules with hand-labeled expected outcomes across real sessions. Measure verifier precision/recall against this set before making strong product claims about adherence accuracy. This is the path from "evidence with confidence levels" to "calibrated metrics."
 
 **Compound rule splitting.**
 The parser's sentence-boundary heuristic will sometimes split wrong or fail to split. Mitigation: conservative splitting (only when both halves have independent imperatives). Wrong splits degrade gracefully — the user sees a rule that's too broad rather than a false adherence score.
