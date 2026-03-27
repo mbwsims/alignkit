@@ -1,31 +1,72 @@
 # agentlint v1 — Technical Specification
 
-A TypeScript CLI that measures, debugs, and optimizes AI coding agent instruction files. v1 is Claude Code focused.
+Best-in-class Claude Code instruction analysis. Lint support for other formats.
 
 ---
 
-## Scope
+## Scope & Confidence Tiers
 
-**In v1:**
+**Tier 1 — Stable (lint):**
 - `agentlint lint` — static analysis of instruction files, zero cost
 - `agentlint lint --deep` — LLM-powered analysis (effectiveness prediction, coverage gaps, consolidation, rewrites), requires API key
-- `agentlint check` — per-rule adherence from Claude Code session history, zero cost
+
+Lint is the trust anchor. It works on any instruction file, requires no session data, and produces deterministic results. This is what we ship first and what we lead with.
+
+**Tier 2 — Evidence-based (check, watch, report, optimize):**
+- `agentlint check` — per-rule adherence from Claude Code session history
 - `agentlint watch` — background daemon that monitors sessions and populates history
 - `agentlint status` — quick adherence pulse check from history
 - `agentlint report` — trend analysis with recommendations from history
 - `agentlint optimize` — generate improved instruction file from adherence data
 
+These features are gated on the session ingestion milestone (see below). They report adherence as evidence with explicit confidence levels, not ground truth. All output includes the verification method and sample size so users can judge the strength of each data point.
+
+**Session ingestion gate:** Before shipping any Tier 2 feature, we must:
+1. Capture real Claude Code session fixtures from at least 3 different projects
+2. Document the confirmed schema for `sessions-index.json`, project directory structure, and JSONL line format
+3. Build and test the session reader against these fixtures
+4. Define supported log format variants and version boundaries
+
+Tier 2 features do not ship until step 3 passes.
+
 **Out of v1:**
 - Task-based mode (running agents on synthetic tasks)
-- Cursor session reader (lint-only for .cursorrules, no session analysis)
+- Cursor session analysis (lint-only for .cursorrules)
 - Git-based fallback inference
 - Multi-model comparison
-- Narrative/character testing
+- Merged instruction file analysis (see Supported Environments)
 - Plugin system for custom parsers or verifiers
 
 **Distribution:** npm package. `npx agentlint lint` works with zero install.
 
 **Language:** TypeScript, targeting Node 18+.
+
+---
+
+## Supported Environments
+
+**Claude Code versions:** Tested against the Claude Code version current at time of development. The session reader includes a format version check and fails clearly if the log format is unrecognized rather than producing wrong results.
+
+**Instruction file discovery:**
+- Auto-discovery order: `CLAUDE.md` > `.cursorrules` > `AGENTS.md` > `.cursor/rules`
+- v1 discovers and analyzes the primary instruction file only
+- When multiple files exist (root + nested CLAUDE.md, AGENTS.md), each is analyzed independently if explicitly targeted (`agentlint lint ./src/CLAUDE.md`)
+- No "effective rules" merging across files in v1 — this requires real user feedback on what "merged" means to them
+
+**Monorepo behavior:**
+- Each project directory maps to its own Claude Code session history
+- `agentlint check` uses the CWD to resolve the correct session directory
+- Running from a monorepo root analyzes root-level instruction files against root-level sessions
+- Running from a sub-package analyzes that package's instruction files against that package's sessions (if Claude Code was invoked from that directory)
+
+**Format support matrix:**
+
+| Format | lint | lint --deep | check/watch/report/optimize |
+|---|---|---|---|
+| CLAUDE.md | ✓ | ✓ | ✓ (Claude Code sessions) |
+| AGENTS.md | ✓ | ✓ | ✓ (Claude Code sessions) |
+| .cursorrules | ✓ | ✓ | ✗ (no Cursor session reader) |
+| .cursor/rules | ✓ | ✓ | ✗ (no Cursor session reader) |
 
 ---
 
@@ -40,20 +81,24 @@ interface Rule {
   // SHA-256 hash of normalized rule text (lowercased, whitespace-collapsed).
   // Used as primary key in history. Any text change — including typo fixes —
   // produces a new ID. This is intentional: we don't attempt fuzzy ID stability
-  // because even small wording changes can affect agent behavior. When a rule's
-  // text changes, its old history remains (keyed by old ID) and the new version
-  // starts fresh. The report command surfaces this as "rule reworded" rather
-  // than "rule disappeared + new rule appeared" by detecting high text similarity
-  // between old and new rule IDs across epochs.
+  // because even small wording changes can affect agent behavior.
+  //
+  // Continuity across rewrites: when a rules version changes, the report
+  // command computes text similarity between old and new rule sets. Rules
+  // with >0.7 Jaccard similarity are treated as "reworded" in output,
+  // preserving the narrative ("Rule X was reworded, adherence went from
+  // 40% to 75%") rather than showing a disappearance + new rule.
   id: string;
 
-  // Human-readable slug derived from rule text. Used as the key in config file
-  // overrides (e.g., "always-add-error-handling"). Generated by: lowercasing
-  // the rule text, stripping non-alphanumeric characters, replacing whitespace
-  // runs with hyphens, truncating to 60 characters, and deduplicating by
-  // appending -2, -3, etc. if multiple rules produce the same slug.
-  // The verifier engine matches config overrides by comparing this slug to
-  // config keys. Slugs are NOT stable across text edits (same as id).
+  // Human-readable slug derived from rule text. Used as the key in config
+  // file overrides. Generated by: lowercasing, stripping non-alphanumeric
+  // characters, replacing whitespace runs with hyphens, truncating to 60
+  // characters, deduplicating by appending -2, -3, etc.
+  //
+  // Slugs are NOT stable across text edits. Config bindings break on
+  // rewrites. This is acceptable because config overrides are a power-user
+  // feature, and the slug derivation is deterministic and inspectable
+  // (run `agentlint lint --json` to see all slugs).
   slug: string;
 
   // Raw text as it appears in the instruction file.
@@ -70,30 +115,28 @@ interface Rule {
   };
 
   // Classification. Determined by keyword analysis during parsing.
-  //
-  // tool-constraint:   references a specific tool or command (pnpm, git, docker)
-  // code-structure:    references code patterns (exports, imports, types, naming)
-  // process-ordering:  specifies sequencing (run X before Y)
-  // style-guidance:    subjective quality (clean code, meaningful names)
-  // behavioral:        agent meta-behavior (ask questions, think step by step)
-  // meta:              about the instruction file itself or project setup
-  category: 'tool-constraint' | 'code-structure' | 'process-ordering'
-           | 'style-guidance' | 'behavioral' | 'meta';
+  category: RuleCategory;
 
   // Whether the rule can be verified automatically, needs user config, or
   // cannot be verified at all. Drives what appears in check output.
   verifiability: 'auto' | 'user-config' | 'unverifiable';
 
-  // Structural issues found during lint. Each diagnostic has a severity
-  // and a human-readable message explaining the problem and how to fix it.
+  // Structural issues found during lint.
   diagnostics: Diagnostic[];
 }
+
+type RuleCategory =
+  | 'tool-constraint'    // references a specific tool or command (pnpm, git, docker)
+  | 'code-structure'     // references code patterns (exports, imports, types, naming)
+  | 'process-ordering'   // specifies sequencing (run X before Y)
+  | 'style-guidance'     // subjective quality (clean code, meaningful names)
+  | 'behavioral'         // agent meta-behavior (ask questions, think step by step)
+  | 'meta';              // about the instruction file itself or project setup
 
 interface Diagnostic {
   severity: 'error' | 'warning';
   code: 'VAGUE' | 'CONFLICT' | 'REDUNDANT' | 'STALE' | 'ORDERING';
   message: string;
-  // For CONFLICT and REDUNDANT: the other rule involved.
   relatedRuleId?: string;
 }
 ```
@@ -112,7 +155,7 @@ type AgentAction =
 
 ### Observation
 
-Result of verifying one rule against one session. Uses a discriminated union to prevent invalid states (e.g., `relevant: false` with `followed: true`).
+Result of verifying one rule against one session. Uses a discriminated union to prevent invalid states.
 
 ```typescript
 type Observation =
@@ -121,24 +164,32 @@ type Observation =
       sessionId: string;
       relevant: false;
       method: VerificationMethod;
+      confidence: ObservationConfidence;
     }
   | {
       ruleId: string;
       sessionId: string;
       relevant: true;
-      // null = relevant but couldn't determine (unmapped rule).
-      followed: boolean | null;
+      followed: boolean | null; // null = relevant but couldn't determine
       method: VerificationMethod;
+      confidence: ObservationConfidence;
     };
 
 type VerificationMethod =
   | 'auto:bash-keyword'
   | 'auto:bash-sequence'
   | 'auto:file-pattern'
-  | 'auto:ast-check'
+  | 'auto:heuristic-structure' // regex/string-based code structure checks
   | 'user:custom'
   | 'llm-judge'
   | 'unmapped';
+
+// Confidence indicates the strength of the evidence behind the observation.
+// Displayed in check/report output so users can judge each data point.
+type ObservationConfidence = 'high' | 'medium' | 'low';
+// high:   exact keyword match, clear positive/negative signal
+// medium: heuristic match, pattern-based inference
+// low:    indirect evidence, partial match
 ```
 
 ### Session Result (history storage)
@@ -149,12 +200,42 @@ One line in `.agentlint/history.jsonl`:
 interface SessionResult {
   sessionId: string;
   timestamp: string; // ISO 8601
-  // Hash of the instruction file at time of analysis. Used to segment
-  // history into epochs when the file changes.
+  // Hash of the instruction file at time of analysis.
   rulesVersion: string;
+  // Version of the analysis engine. Used for cache invalidation:
+  // when the engine version changes, old sessions can be re-analyzed
+  // with `check --fresh` to benefit from improved verifiers.
+  analysisVersion: string;
   observations: Observation[];
 }
 ```
+
+---
+
+## Confidence Model
+
+Adherence numbers are evidence, not verdicts. The system is explicit about how much to trust each data point.
+
+**Per-observation confidence:**
+Each observation carries a confidence level (high/medium/low) based on the verification method:
+
+| Method | Typical confidence | Rationale |
+|---|---|---|
+| `auto:bash-keyword` | high | Exact string match in command |
+| `auto:bash-sequence` | medium | Temporal ordering can have false positives (unrelated commands) |
+| `auto:file-pattern` | high | Exact glob match on file paths |
+| `auto:heuristic-structure` | medium | Regex-based, not AST-backed — can miss edge cases |
+| `user:custom` | high | User-defined, assumed intentional |
+| `llm-judge` | medium | LLM assessment, inherently probabilistic |
+
+**Per-rule adherence confidence:**
+Based on sample size:
+- <3 sessions: "Limited data — directional only"
+- 3-9 sessions: "Moderate confidence"
+- 10+ sessions: "High confidence"
+
+**Display policy:**
+All adherence numbers in CLI output include the sample size and verification method. No number is shown without context. Example: `86% (12/14 sessions, auto:bash-sequence, moderate confidence)`.
 
 ---
 
@@ -165,17 +246,28 @@ interface SessionResult {
 **Input:** file path (or auto-discovered)
 **Output:** `Rule[]`
 
-Auto-discovery order: `CLAUDE.md` > `.cursorrules` > `AGENTS.md` > `.cursor/rules`
+Each parser extracts normative blocks from the instruction file and classifies them.
 
-Each parser splits the instruction file into individual rules and classifies them. The parsers normalize to the same `Rule[]` interface so the rest of the system is format-agnostic.
+**Parsing strategy — normative blocks, not sentence fragments:**
 
-**Parsing strategy:**
-
-CLAUDE.md and AGENTS.md are markdown. Rules are extracted by:
+CLAUDE.md and AGENTS.md are markdown. Rules are extracted as coherent blocks:
 1. Split on headings (##, ###) to get sections
-2. Within sections, split on list items (-, *, numbered) and standalone sentences/paragraphs
-3. Each extracted chunk is one Rule
-4. Headings are stored in `Rule.source.section` for use by the optimizer when reassembling valid markdown
+2. Within sections, extract:
+   - Individual list items (-, *, numbered) — each is one Rule
+   - Standalone paragraphs that contain normative language (imperatives, "always/never/must/should") — each paragraph is one Rule as a whole, NOT split into sentences
+3. Skip: code fences (unless preceded by "Example rule:" or similar marker), purely explanatory paragraphs (no imperative language), blank lines
+4. Headings are stored in `Rule.source.section` for the optimizer
+
+**What is NOT a rule:**
+- Code examples and code fences (context, not instructions)
+- Explanatory text ("This project uses React for the frontend")
+- Section headings themselves (organizational, not normative)
+- Inline code references within explanatory text
+
+**Compound rule handling:**
+When a paragraph or list item contains multiple distinct instructions ("Use pnpm for package management. Always run tests before committing."), the parser splits on sentence boundaries ONLY when each sentence contains independent imperative language. If the sentences are dependent ("When writing React components, prefer functional components with hooks. Use TypeScript generics for reusable utilities."), they stay as one rule — the context of the first sentence modifies the second.
+
+Heuristic: split on sentence boundaries only when both sentences start with or contain an independent imperative verb (Always/Never/Use/Run/Create/Prefer) and do not share a conditional clause (When/If/For/During).
 
 .cursorrules is typically plain text or markdown-like. Same strategy with looser heading detection.
 
@@ -190,7 +282,7 @@ CLAUDE.md and AGENTS.md are markdown. Rules are extracted by:
 | Meta-behavior: `think`, `consider`, `ask`, `explain`, `step by step` | `behavioral` |
 | Self-referential: `this file`, `these instructions`, `project setup`, `repository`, `codebase` | `meta` |
 
-A rule can match multiple categories. Priority order determines the final classification: `tool-constraint` > `code-structure` > `process-ordering` > `meta` > `style-guidance` > `behavioral`. If no keywords match any category, the rule defaults to `behavioral` (unverifiable).
+Priority order when multiple categories match: `tool-constraint` > `code-structure` > `process-ordering` > `meta` > `style-guidance` > `behavioral`. If no keywords match, defaults to `behavioral` (unverifiable).
 
 **Verifiability mapping:**
 
@@ -212,7 +304,7 @@ Runs these checks (all deterministic, no LLM):
 
 **Token analysis:**
 - Count tokens using `js-tiktoken` with `cl100k_base` encoding
-- Note: this is the GPT-4 tokenizer, not Claude's. Token counts are approximate and may differ from Claude's actual tokenization by up to ~20%. This is documented in CLI output as "~N tokens (estimated)".
+- Note: this is the GPT-4 tokenizer, not Claude's. Token counts are approximate and may differ by up to ~20%. Displayed as "~N tokens (estimated)".
 - Calculate context window percentage (against 200k default, configurable)
 - Flag if over configurable threshold (default: 2,000 tokens)
 
@@ -231,13 +323,13 @@ Runs these checks (all deterministic, no LLM):
 - Flag as STALE with message: "References a specific version. Verify this is current."
 
 **Ordering analysis:**
-- Rules classified as `tool-constraint` or `process-ordering` (high-signal categories) appearing in the bottom half of the file get an ORDERING warning
+- Rules classified as `tool-constraint` or `process-ordering` appearing in the bottom half of the file get an ORDERING warning
 - Message: "High-priority rules appear late in the file. Agents attend more to early content."
 
 **Conflict detection (lexical only — semantic conflicts require --deep):**
 - Detect negation pairs: "always use X" vs "never use X", "use X" vs "don't use X"
 - Detect tool conflicts: "use pnpm" vs "use npm" (same tool category, different tools)
-- String matching only. Will miss semantic conflicts like "use default exports" vs "use named exports" — that's what `--deep` is for.
+- String matching only. Will miss semantic conflicts — that's what `--deep` is for.
 
 ### 3. Deep Analyzer (lint --deep)
 
@@ -248,18 +340,11 @@ Single LLM call (or batched into 2-3 if the rule set is large). Sends:
 - All rules (text only)
 - Project metadata: package.json dependencies, tsconfig compiler options, top-level directory listing, file counts per directory
 
-**Privacy note for --deep:** The data sent to the Anthropic API includes rule text and project structure metadata. This means directory names, filenames (not contents), dependency names, and TypeScript configuration are transmitted. No source code, no session logs, no file contents. This is documented in the `--deep` help text so users can make an informed decision.
-
 **Rule effectiveness prediction:**
-For each rule, the LLM assesses whether it's likely to be followed based on:
-- Specificity (concrete vs abstract)
-- Position in file
-- Whether it conflicts with common model behaviors
-- Whether it's reinforced by other rules
-Returns a predicted effectiveness score and suggested rewrite if score is low.
+For each rule, the LLM assesses whether it's likely to be followed. Returns qualitative effectiveness buckets — HIGH, MEDIUM, LOW — not numeric percentages. Numeric predictions require calibration data we don't have yet. Suggested rewrite included for LOW-effectiveness rules.
 
 **Coverage gap analysis:**
-Given the project structure, identify important behaviors the instruction file doesn't cover. E.g., "Your project uses React Query but no rules mention data fetching patterns" or "You have 40 API routes but no error handling guidelines."
+Given the project structure, identify important behaviors the instruction file doesn't cover.
 
 **Smart consolidation:**
 Identify groups of related rules that could be merged into fewer, stronger rules. Return the merged versions with token savings.
@@ -267,7 +352,7 @@ Identify groups of related rules that could be merged into fewer, stronger rules
 **Concrete rewrites:**
 For rules flagged as vague by the static analyzer, generate specific rewrites informed by the project context.
 
-**Cost:** One Anthropic API call. Typically <$0.10 depending on rule count and project size. Requires `ANTHROPIC_API_KEY` env var.
+**Cost:** One Anthropic API call. Typically <$0.10. Requires `ANTHROPIC_API_KEY` env var.
 
 ### 4. Session Reader
 
@@ -276,84 +361,76 @@ For rules flagged as vague by the static analyzer, generate specific rewrites in
 
 Reads Claude Code session logs from `~/.claude/projects/`.
 
-**Project resolution:**
+**⚠ Implementation gate:** This component cannot be built from spec assumptions alone. Before writing any parsing code:
 
-Claude Code stores sessions under `~/.claude/projects/<hash>/` where `<hash>` is derived from the project directory path. The exact hashing algorithm must be confirmed by inspecting a live Claude Code installation before implementation. The session reader:
+1. Inspect a live Claude Code installation's `~/.claude/` directory structure
+2. Capture fixture files from at least 3 projects (different sizes, monorepo and single-repo)
+3. Document the confirmed schema:
+   - Project directory naming (hash algorithm, path encoding)
+   - `sessions-index.json` schema (field names, types, what `projectPath` looks like when multiple projects share an index)
+   - JSONL line variants (not all lines are `{ type, message }` — document all observed shapes)
+   - Tool_use block schema (field names within `input` for each tool type)
+   - Compaction markers (exact field name and value)
+4. Write integration tests against captured fixtures before building the reader
 
+The schema documented below is our best understanding and WILL be revised after step 3.
+
+**Project resolution (to be confirmed):**
+Claude Code stores sessions under `~/.claude/projects/<dir>/`. The session reader:
 1. Scans `~/.claude/projects/` subdirectories
-2. Reads each subdirectory's `sessions-index.json` to find the `projectPath` field
-3. Matches the current working directory to the correct project hash by comparing stored project paths
+2. Reads each subdirectory's index to find the project path
+3. Matches the current working directory to the correct project directory
 4. Fails clearly if no match: "No Claude Code sessions found for this project directory."
 
-**Pre-implementation requirement:** Before building the session reader, inspect the actual structure of `~/.claude/projects/` and `sessions-index.json` on a machine with Claude Code installed. Document the confirmed schema in the codebase. The fields we need at minimum:
-- How project directories map to hashed subdirectory names
-- The `sessions-index.json` schema: session IDs, timestamps, project path, session status
-- The JSONL line format: message structure, tool_use block schema, compaction markers
-
 **Session discovery:**
-From the matched project directory, read `sessions-index.json` for session metadata. Filter to sessions after the instruction file's last modification date. Modification date is determined by:
+From the matched project directory, read session metadata. Filter to sessions after the instruction file's last modification date:
 1. `git log -1 --format=%cI -- <instruction-file>` (if in a git repo and file is tracked)
 2. Filesystem `mtime` of the instruction file (fallback for non-git projects or untracked files)
 
-**JSONL parsing:**
-For each relevant session, parse the JSONL file(s):
-1. Each line is a JSON object with `type` and `message` fields
-2. Skip lines where `isCompactSummary: true` (compacted earlier context)
-3. From assistant messages, extract `tool_use` content blocks
-4. Map tool_use blocks to `AgentAction` objects based on the `name` field:
-   - `name: "Bash"` → `BashAction` with `input.command`
-   - `name: "Write"` → `WriteAction` with `input.file_path` and `input.content`
-   - `name: "Edit"` → `EditAction` with `input.file_path`, `input.old_string`, `input.new_string`
-   - `name: "Read"` → `ReadAction` with `input.file_path`
-5. Extract timestamps from message metadata for ordering analysis
-
-**Cross-file continuation:**
-A single logical session can span multiple JSONL files. Reconstruct by grouping on `sessionId` across files in the project directory.
+**JSONL parsing (to be confirmed):**
+For each relevant session, stream-parse the JSONL file(s) line by line:
+1. Skip compaction markers
+2. From assistant messages, extract tool_use content blocks
+3. Map tool_use blocks to `AgentAction` objects:
+   - Bash tool → `BashAction` with command string
+   - Write tool → `WriteAction` with file path and content
+   - Edit tool → `EditAction` with file path and old/new content
+   - Read tool → `ReadAction` with file path
+4. Extract timestamps for ordering analysis
 
 **Active session handling:**
-Skip JSONL files whose filesystem modified time is less than 2 minutes ago. This avoids parsing sessions still in progress, which could have partially-written JSON lines.
+Skip sessions whose last-modified time is less than 2 minutes ago.
 
 **Error handling:**
-- Malformed JSON lines: skip and continue (log a warning)
-- Missing fields in tool_use blocks: skip that action (don't crash)
-- Unknown tool names: ignore (we only care about Bash, Write, Edit, Read)
-- No sessions found after filter date: report clearly with session count before filter date so user knows data exists but predates current rules
+- Malformed JSON lines: skip and continue (log warning)
+- Missing fields: skip that action (don't crash)
+- Unknown tool names: ignore
+- Unrecognized line format: skip with warning (not crash — formats may have variants we haven't seen)
+- No sessions found: report clearly with count before filter date
 
-**Implementation note:** We implement our own parser scoped to tool_use extraction. Existing open-source parsers (claude-code-log, clog) are used as references for edge case discovery, not as dependencies. Our parser is intentionally minimal — it extracts actions, not conversation content.
+**Implementation note:** We implement our own parser scoped to tool_use extraction, not a general session renderer.
 
 ### 5. Verifier Engine
 
 **Input:** `Rule`, `AgentAction[]` (from one session)
 **Output:** `Observation`
 
-The verifier engine determines whether a rule was relevant to a session and whether it was followed.
-
 **Auto-mapper:**
-Maps each rule to one or more verification strategies based on its category and keywords.
+Maps each rule to a verification strategy. v1 uses heuristic checks (regex, string matching, glob patterns) — NOT AST-based verification. The `auto:heuristic-structure` method replaces what was previously called `auto:ast-check`. If heuristic accuracy proves insufficient for code structure rules, AST-backed verification (via tree-sitter WASM) is a v2 enhancement.
 
-| Rule pattern | Verification strategy | Example |
-|---|---|---|
-| References specific CLI tool | Scan Bash actions for tool name. Check correct tool was used, alternative was not. | "use pnpm not npm" → check Bash commands contain `pnpm`, not `npm` |
-| References file extension or directory | Scan Write/Edit file paths with glob matching. | "tests in `__tests__/`" → check test file Write paths match `**/__tests__/**` |
-| Specifies ordering of actions | Check temporal ordering of matching Bash actions within the session. | "run tests before committing" → find test command timestamp < git commit timestamp |
-| References code structure keywords | Parse Write/Edit content as AST (TypeScript/JavaScript via tree-sitter or ts-morph). Check structural properties. | "use named exports" → parse written files, check for named vs default exports |
-| No actionable keywords | Return `{ relevant: true, followed: null, method: 'unmapped' }` | "be consistent" |
+| Rule pattern | Verification strategy | Confidence | Example |
+|---|---|---|---|
+| References specific CLI tool | Bash command keyword scan | high | "use pnpm not npm" |
+| References file extension or directory | Write/Edit file path glob | high | "tests in `__tests__/`" |
+| Specifies ordering of actions | Bash action temporal ordering | medium | "run tests before committing" |
+| References code structure keywords | Regex on Write/Edit content | medium | "use named exports" → grep for `export {` vs `export default` |
+| No actionable keywords | Unmapped | n/a | "be consistent" |
 
-**Strategy composability:**
-A single rule can trigger multiple verification strategies (e.g., "Always use `pnpm exec jest` and check test output before committing" is both `bash-keyword` and `bash-sequence`). When multiple strategies apply:
-
-- Priority order: `ast-check` > `file-pattern` > `bash-sequence` > `bash-keyword`
-- The highest-priority matching strategy determines the primary result
-- In v1, strategies do NOT compose (no AND/OR logic). One strategy per rule. If this proves too limiting, composability is a v2 enhancement.
+**Compound rules:**
+The parser splits compound rules into atomic sub-rules at parse time (see Parser section). Each sub-rule gets its own observation. The verifier engine always verifies one atomic rule at a time — no allOf/anyOf composition needed.
 
 **Relevance determination:**
-A rule is relevant to a session only if the session contains actions where the rule could apply:
-- Tool rules: at least one Bash action invoked a related tool category
-- File pattern rules: at least one Write/Edit action touched a matching path
-- Process ordering rules: at least one action from each part of the sequence exists
-- Code structure rules: at least one Write/Edit action created/modified code files
-
-If no matching actions exist, the rule is `{ relevant: false }` for that session.
+A rule is relevant to a session only if the session contains actions where the rule could apply. If no matching actions exist, the rule is `{ relevant: false }`.
 
 **User-configured verifiers:**
 Users can override auto-mapping in config:
@@ -369,9 +446,6 @@ Users can override auto-mapping in config:
 ```
 
 Custom check DSL: `grep:<pattern> in <action-type>:<file-glob>`
-- `<pattern>`: regex matched against action content
-- `<action-type>`: `bash`, `write`, `edit`
-- `<file-glob>`: glob matched against file paths (for write/edit) or command strings (for bash)
 
 **LLM-as-judge (opt-in per rule):**
 ```jsonc
@@ -383,43 +457,79 @@ Custom check DSL: `grep:<pattern> in <action-type>:<file-glob>`
   }
 }
 ```
-Sends the rule text plus relevant Write/Edit content to the LLM. Returns followed: true/false. Costs per invocation. Not recommended for high-volume use with `watch`.
+Sends the rule text plus relevant Write/Edit content (source code) to the LLM. Returns followed: true/false. See Privacy section for implications.
 
 ### 6. History Store
 
 **Storage:** `.agentlint/history.jsonl` — append-only file.
 
-Each line is a JSON object conforming to `SessionResult`:
-```jsonl
-{"sessionId":"abc123","timestamp":"2026-03-25T15:14:00Z","rulesVersion":"a1b2c3","observations":[{"ruleId":"r1","sessionId":"abc123","relevant":true,"followed":true,"method":"auto:bash-keyword"}]}
-```
+Each line is a JSON object conforming to `SessionResult`.
 
-**Rules version tracking:**
-The `rulesVersion` field is a hash of the instruction file content at the time of analysis. When `watch` or `check` detects that the instruction file has changed (by comparing the current hash to the last recorded one), it starts a new epoch. Queries that compute trends (report, status) segment by epoch so that adherence changes after a rule edit are visible.
+**Analysis versioning:**
+The `analysisVersion` field in each SessionResult is a semver string (e.g., "0.1.0") that changes when verifier logic is improved. This enables:
+- `check --fresh` to re-analyze old sessions with improved verifiers
+- Cache invalidation: when `analysisVersion` changes, `check` warns "Verifier logic has been updated. Run `check --fresh` to re-analyze with improved accuracy."
+- History entries from older analysis versions remain valid but are marked with their version in report output
 
-Epoch logic is part of `store.ts` — two functions: `getCurrentEpoch()` (compute current rules hash, compare to last recorded) and `queryByEpoch()` (filter observations by rules version). This doesn't warrant a separate module.
-
-**Querying:**
-Load the full file into memory, parse each line, filter/aggregate in code. At expected data volumes (hundreds of lines over months), this is <1ms. No indexing needed.
+**Epoch logic** is part of `store.ts`: `getCurrentEpoch()` computes current rules hash, `queryByEpoch()` filters observations.
 
 **Concurrency:**
-The `watch` daemon and `check` command may both append to this file. To prevent interleaved writes, use an advisory lockfile at `.agentlint/history.lock`:
-- Acquire lock before appending (create lockfile with PID)
-- Release lock after append completes (delete lockfile)
-- If lockfile exists and PID is dead, treat as stale and reclaim
-- Timeout after 5 seconds with a clear error message
+Advisory lockfile at `.agentlint/history.lock` with PID, 5-second timeout, stale PID reclamation.
 
 **Deduplication:**
-Before appending a session result, check if `sessionId` already exists in the file. Skip if duplicate. This prevents `watch` restarts from producing duplicate entries.
+Before appending, check if `sessionId` already exists. Skip if duplicate.
 
-**Garbage collection:**
-None in v1. The file grows indefinitely but slowly. A session with 50 rules produces ~2KB of JSONL. A year of daily use at 5 sessions/day = ~3.5MB. Not a concern.
+---
+
+## Privacy
+
+agentlint reads Claude Code session logs. The privacy model is split by feature:
+
+### Default / local mode (lint, check, watch, status, report, optimize)
+
+| | Read | Store | Transmit |
+|---|---|---|---|
+| Instruction file text | ✓ | Rule IDs + slugs only | Nothing |
+| Session logs (tool_use blocks) | ✓ | Boolean verdicts only | Nothing |
+| Source code / file contents | Read during verification | NOT stored | Nothing |
+| Bash commands | Read during verification | NOT stored | Nothing |
+
+Nothing leaves the machine. History contains only rule IDs, session IDs, boolean verdicts, and method strings.
+
+### `lint --deep`
+
+| | Transmitted to Anthropic API |
+|---|---|
+| Rule text | ✓ (full text of each rule) |
+| Directory names + file names | ✓ (not file contents) |
+| package.json dependencies | ✓ (dependency names only) |
+| tsconfig compiler options | ✓ |
+| Source code | ✗ |
+| Session logs | ✗ |
+| Bash command history | ✗ |
+
+Documented in `--deep` help text: "Sends rule text and project structure metadata (directory names, filenames, dependency names) to the Anthropic API."
+
+### `llm-judge`
+
+| | Transmitted to Anthropic API |
+|---|---|
+| Rule text | ✓ |
+| Write/Edit content (source code) | ✓ — this is the code the agent wrote |
+| Bash commands | ✗ |
+| Other session data | ✗ |
+
+**llm-judge sends source code to the API.** This is clearly documented in the config file help and in CLI output when llm-judge is configured. Users opt into this per-rule.
+
+### Telemetry
+
+None in v1. No anonymous tracking, no usage hooks, no phone-home. Telemetry is deferred until the product earns trust. When we add it (v2+), it will be opt-in with explicit export/share flows, not background collection.
+
+**Recommendation:** Add `.agentlint/` to `.gitignore` on first run.
 
 ---
 
 ## CLI Commands
-
-All commands auto-discover the instruction file if not specified. Discovery order: `CLAUDE.md` > `.cursorrules` > `AGENTS.md` > `.cursor/rules`.
 
 ### `agentlint lint [file]`
 
@@ -462,16 +572,14 @@ $ agentlint lint --deep
  EFFECTIVENESS PREDICTIONS:
 
  ⚠  LOW         Rule 23 ("Always create a feature branch before changes")
-                 Process-ordering rules without explicit tool names have ~30%
-                 adherence. Rewrite: "Run 'git checkout -b feature/<name>'
-                 before making any file changes."
+                 Process-ordering rules without explicit tool names are
+                 unlikely to be followed. Rewrite: "Run 'git checkout -b
+                 feature/<name>' before making any file changes."
 
  COVERAGE GAPS:
 
  ✗  MISSING     Your project uses React Query (found in package.json) but no
                  rules mention data fetching patterns or cache invalidation.
-
- ✗  MISSING     14 API routes in src/routes/ but no error handling guidelines.
 
  CONSOLIDATION:
 
@@ -491,7 +599,9 @@ $ agentlint lint --deep
 
 Per-rule adherence from Claude Code session history.
 
-**How check and watch relate:** Both use the same session-reading and verification pipeline (`analyzeSession()` function). `check` is an on-demand one-shot. `watch` runs continuously. Cache logic for `check`: if `.agentlint/history.jsonl` exists, load the set of session IDs already in history. Compare against session IDs in `sessions-index.json`. If all sessions are already in history (no new unprocessed sessions), read from history (instant). Otherwise, parse only the sessions not yet in history, append their results, then aggregate and output. This means `check` is always incremental — it never re-parses sessions it's already seen.
+**How check and watch relate:** Both use the same `analyzeSession()` pipeline. `check` is incremental: it loads session IDs already in history, compares against `sessions-index.json`, parses only new sessions, appends results, then aggregates. `watch` does the same thing continuously.
+
+**Cache invalidation:** When `analysisVersion` in the latest history entries differs from the current engine version, `check` warns: "Verifier logic has been updated since last analysis. Run `check --fresh` to re-analyze."
 
 ```
 $ agentlint check
@@ -502,20 +612,17 @@ Found 14 sessions since then.
 
 RULE ADHERENCE:
 
- Rule                                    Sessions  Followed  Adherence  Method
- ───────────────────────────────────────────────────────────────────────────────
- "Use pnpm, not npm"                     9/14      9/9       100% ✓     auto:bash-keyword
- "Always run tests before committing"    14/14     12/14      86% ✓     auto:bash-sequence
- "Use named exports"                     11/14      8/11      73% ~     auto:ast-check
- "Add JSDoc to public functions"          7/14      2/7       29% ✗     auto:ast-check
- "Create a branch before changes"        14/14      2/14      14% ✗     auto:bash-sequence
- "Think step by step"                     —          —        n/a       unmapped:unverifiable
- "Use meaningful variable names"          —          —        n/a       unmapped:complex
+ Rule                                    Sessions  Followed  Adherence  Confidence  Method
+ ──────────────────────────────────────────────────────────────────────────────────────────
+ "Use pnpm, not npm"                     9/14      9/9       100% ✓     high        auto:bash-keyword
+ "Always run tests before committing"    14/14     12/14      86% ✓     medium      auto:bash-sequence
+ "Use named exports"                     11/14      8/11      73% ~     medium      auto:heuristic-structure
+ "Add JSDoc to public functions"          7/14      2/7       29% ✗     medium      auto:heuristic-structure
+ "Create a branch before changes"        14/14      2/14      14% ✗     medium      auto:bash-sequence
+ "Think step by step"                     —          —        n/a       —           unmapped
+ "Use meaningful variable names"          —          —        n/a       —           unmapped
 
  14 rules auto-verified · 2 unverifiable · 1 needs custom check
-
- TOKEN BUDGET:
- Removing 3 low-adherence rules saves ~400 tokens with minimal behavior change.
 ```
 
 **Partial data (1-2 sessions):**
@@ -531,7 +638,7 @@ Found 2 sessions since last CLAUDE.md change.
 ```
 
 **Flags:**
-- `--fresh` — force re-parsing sessions even if history exists
+- `--fresh` — re-parse all sessions (ignores history cache, useful after engine updates)
 - `--format <format>` — terminal, json, markdown
 
 ### `agentlint watch`
@@ -541,55 +648,39 @@ Background daemon. Polls for new sessions, analyzes them, appends to history.
 ```
 $ agentlint watch
 
-Watching: ~/.claude/projects/<hash>/
+Watching: ~/.claude/projects/<dir>/
 Tracking: ./CLAUDE.md (47 rules, last modified 5 days ago)
 History: .agentlint/history.jsonl
 
-[03:14 PM] Session abc123 — 31 rules checked, 26 followed (84%)
-[03:47 PM] Session def456 — 28 rules checked, 22 followed (79%)
-[04:02 PM] CLAUDE.md changed (commit b2c3d4e) — new tracking epoch
-[04:15 PM] Session ghi789 — 29 rules checked, 25 followed (86%)
+[03:14 PM] Session abc123 — 31 rules relevant, 26 followed (84%)
+[03:47 PM] Session def456 — 28 rules relevant, 22 followed (79%)
+[04:02 PM] CLAUDE.md changed — new tracking epoch
+[04:15 PM] Session ghi789 — 29 rules relevant, 25 followed (86%)
 ```
 
-**Implementation:**
-- Poll `sessions-index.json` every 30 seconds for new session entries
-- On new session: wait for completion (modified time >2 min ago), parse, verify, append to history
-- On instruction file change (detected via git or file hash): log new epoch, update active rule set
-- Designed to run in a terminal tab or as a system service
-
 **Process management:**
-- On start, write PID to `.agentlint/watch.pid`. If the PID file exists and the process is alive, refuse to start with a clear error ("watch is already running, PID <N>").
-- Track the last-processed session ID in `.agentlint/watch.cursor` (a single-line file). On restart, resume from this point rather than re-processing all sessions.
-- Handle SIGTERM and SIGINT gracefully: finish processing the current session (if any), write cursor, remove PID file, exit.
+- PID file at `.agentlint/watch.pid` — refuse to start if process is alive
+- Cursor file at `.agentlint/watch.cursor` — last-processed session ID for restart resumption
+- Graceful shutdown on SIGTERM/SIGINT: finish current session, write cursor, remove PID, exit
 
 **Flags:**
 - `--interval <seconds>` — polling interval (default: 30)
-- `--quiet` — suppress per-session output, only log errors and epoch changes
+- `--quiet` — suppress per-session output
 
 ### `agentlint status`
 
-Quick pulse check. Reads from history file only.
+Quick pulse check from history.
 
 ```
 $ agentlint status
 
 CLAUDE.md  78% adherence across 14 sessions (last 5 days)  ▁▃▅▇▇ trending up
-  31 rules tracked · 24 auto-verified · 2 consistently ignored · 3 new
-```
-
-Single line designed to be embeddable in shell prompts or aliases.
-
-**If no history exists:**
-```
-$ agentlint status
-
-No history found. Run `agentlint watch` to start collecting data,
-or `agentlint check` for a one-time analysis.
+  31 rules tracked · 24 auto-verified · 2 consistently violated · 3 new
 ```
 
 ### `agentlint report`
 
-Trend analysis with recommendations. Reads from history file.
+Trend analysis with recommendations from history.
 
 ```
 $ agentlint report
@@ -600,33 +691,25 @@ Overall: 71% → 78% (+7%)
 
 IMPROVED:
   ✓ "Run tests before committing"         60% → 86%  (reworded on Tue)
-  ✓ "Use TypeScript strict mode"           80% → 93%
 
 DEGRADED:
-  ✗ "Add JSDoc to public functions"        18% → 12%  (consistently ignored — consider reinforcing or removing)
-
-STABLE:
-  ~ "Use pnpm, not npm"                   100% → 100%
-  ~ "Use named exports"                    73% → 71%
-
-NEW RULES (added this week):
-  ★ "Always create a feature branch"       3 sessions, 100% adherence so far
+  ✗ "Add JSDoc to public functions"        18% → 12%  (consistently violated)
 
 RECOMMENDATIONS:
   • "Add JSDoc to public functions" has been below 20% for 2 weeks.
-    Consider removing it (saves ~40 tokens) or rephrasing to be more specific.
+    Consider rephrasing to be more specific, or removing it (saves ~40 tokens).
   • 3 rules have never been relevant in any session.
-    They may be too specific to trigger, or irrelevant to your current work.
+    They may be too specific to trigger, or relevant only for rare workflows.
 ```
 
 **Flags:**
 - `--days <n>` — reporting window (default: 7)
 - `--format <format>` — terminal (default), json, markdown, html
-  - `html` format writes to `.agentlint/report.html` with charts and per-rule sparklines
+  - `html` writes to `.agentlint/report.html`
 
 ### `agentlint optimize [file]`
 
-Generate an improved instruction file from adherence data.
+Generate an improved instruction file from adherence data. **Conservative by default — no rules are deleted unless explicitly requested.**
 
 ```
 $ agentlint optimize
@@ -634,33 +717,34 @@ $ agentlint optimize
 Auto-detected: ./CLAUDE.md
 Using adherence data from 14 sessions...
 
-Step 1 — Drop unobserved:  Removed 2 rules never relevant in any session
-Step 2 — Deduplicate:      Merged 3 near-duplicate rule pairs (saves 180 tokens)
-Step 3 — Reorder:          Moved top-performing rules to top of each section
-Step 4 — Flag violations:  3 rules consistently violated — review recommended
+Step 1 — Deduplicate:      Merged 3 near-duplicate rule pairs (saves 180 tokens)
+Step 2 — Reorder:          Moved top-performing rules to top of each section
+Step 3 — Flag for review:  5 rules need attention (3 consistently violated, 2 never observed)
 
 RESULT:
   Before: 47 rules, 3,200 tokens
-  After:  42 rules, 2,840 tokens
-  Removed: 5 rules (2 unobserved, 3 deduplicated)
-  Flagged: 3 rules with <20% adherence (kept, but marked for review)
+  After:  44 rules, 3,020 tokens
+  Merged: 3 near-duplicate pairs
+  Flagged: 5 rules for review
 
   Output: CLAUDE.optimized.md
-  Diff:   agentlint-diff.md (shows every change with reasoning)
+  Review: agentlint-diff.md (explains every change)
 ```
 
-**Steps:**
-1. **Drop unobserved:** Remove rules that were never relevant in any analyzed session. These are too specific to ever trigger.
-2. **Deduplicate:** Merge near-duplicate rules (Jaccard similarity >0.6) — keep the one with higher adherence.
-3. **Reorder:** Within each markdown section, move highest-adherence rules to the top. Rules stay within their original sections to maintain valid markdown structure.
-4. **Flag violations:** Rules with adherence below threshold (default: 20%) are NOT automatically removed. Instead, they're flagged with a comment in the output file: `<!-- agentlint: 14% adherence — consider rephrasing or removing -->`. Consistently violated rules may be important (security rules, critical patterns) — the user decides whether to prune or reinforce.
+**Steps (default):**
+1. **Deduplicate:** Merge near-duplicate rules (Jaccard >0.6) — keep the one with higher adherence.
+2. **Reorder:** Within each markdown section, move highest-adherence rules to the top.
+3. **Flag for review:** Rules with <20% adherence or zero relevance are listed in `agentlint-diff.md` with recommendations ("rephrase", "reinforce", "consider removing"). No inline annotations in the output file — the optimized file is clean.
 
-All steps are deterministic and free. No LLM calls.
+**What optimize does NOT do by default:**
+- Delete rules. "Never observed" could mean the rule is for rare but critical scenarios (deployments, incidents, migrations, security).
+- Insert comments or annotations into the output file. All rationale goes in `agentlint-diff.md`.
 
-**With `--deep` (LLM consolidation):**
-Adds Step 3 — Consolidate: send related rule groups to the LLM for intelligent merging into fewer, stronger rules. Same API call pattern as `lint --deep`. When `--deep` is used, the steps are: 1) Drop unobserved, 2) Deduplicate, 3) Consolidate (LLM), 4) Reorder, 5) Flag violations.
+**With `--prune`:** Removes rules that were never relevant in any analyzed session. Use with caution.
 
-**Output:** Always writes a new file (`CLAUDE.optimized.md`), never modifies the original. Also writes `agentlint-diff.md` — a prose-format changelog where each entry describes what changed, which step caused it, and why (e.g., "Removed rule 'Add JSDoc to all functions' — never relevant in 14 sessions (Step 1: Drop unobserved)"). Changes are attributed by step name, not step number, so the format is stable regardless of which steps ran.
+**With `--deep`:** Adds LLM consolidation step between Deduplicate and Reorder.
+
+**Output:** Always writes `CLAUDE.optimized.md` (never modifies original) and `agentlint-diff.md` (prose changelog, changes attributed by step name).
 
 ---
 
@@ -668,14 +752,15 @@ Adds Step 3 — Consolidate: send related rule groups to the LLM for intelligent
 
 ### `.agentlint.config.jsonc`
 
-Optional. Everything works with zero configuration. Uses JSONC (JSON with Comments) format, parsed with `jsonc-parser`.
+Optional. Everything works with zero configuration. Uses JSONC format, parsed with `jsonc-parser`.
 
 ```jsonc
 {
   // Path to instruction file. Overrides auto-discovery.
   "instructionFile": "./CLAUDE.md",
 
-  // Per-rule verifier overrides. Keys are rule slugs (derived from rule text).
+  // Per-rule verifier overrides. Keys are rule slugs.
+  // Run `agentlint lint --json` to see all slugs.
   "rules": {
     "always-add-error-handling": {
       "verifier": "custom",
@@ -686,61 +771,18 @@ Optional. Everything works with zero configuration. Uses JSONC (JSON with Commen
     }
   },
 
-  // Thresholds for lint warnings and optimize flagging.
+  // Thresholds.
   "thresholds": {
     "tokenBudget": 2000,
     "flagBelow": 20,
     "warnBelow": 50
   },
 
-  // Context window size for percentage calculations.
   "contextWindow": 200000
 }
 ```
 
-**Custom check DSL:**
-
-Format: `grep:<regex-pattern> in <action-type>:<file-glob>`
-
-- `action-type`: `bash`, `write`, `edit`
-- `file-glob`: matched against file paths (write/edit) or command strings (bash)
-- `regex-pattern`: matched against action content
-
-Examples:
-- `grep:catch|try in write:src/**/*.ts` — check that written TS files contain error handling
-- `grep:pnpm in bash:*` — check that bash commands use pnpm
-- `grep:describe\\(|it\\( in write:**/*.test.*` — check that test files use describe/it blocks
-
-**API key:** Read from `ANTHROPIC_API_KEY` environment variable. Not stored in config (to avoid accidental commits).
-
-**Config resolution:** Check `.agentlint.config.jsonc` in current directory, then `agentlint` key in `package.json`. No global config in v1.
-
----
-
-## Privacy
-
-agentlint reads Claude Code session logs, which contain full conversation history including source code, commands, and file contents. The privacy model:
-
-**What we read:**
-- `sessions-index.json` for session discovery (timestamps, project paths)
-- JSONL session files — specifically `tool_use` blocks for tool name, command strings, file paths, and written content
-- We parse conversation content only to extract structured `AgentAction` objects
-
-**What we store:**
-- `.agentlint/history.jsonl` contains only: rule IDs, session IDs, boolean verdicts (relevant/followed), verification method strings
-- No source code, no commands, no file contents, no conversation text
-- The history file contains no sensitive data
-
-**What leaves the machine:**
-- Nothing by default
-- `--deep` and `llm-judge` send data to the Anthropic API. Specifically:
-  - Rule text (the content of CLAUDE.md rules)
-  - Project structure metadata: directory names, filenames (not contents), dependency names from package.json, TypeScript config options
-  - NOT source code, NOT session logs, NOT file contents, NOT bash command history
-- No telemetry, no analytics, no phone-home in v1
-- Future: opt-in anonymized community data sharing (rule categories + adherence rates, no rule text or project details)
-
-**Recommendation:** Add `.agentlint/` to `.gitignore` by default. The first run of any command that writes to `.agentlint/` should check and offer to add it.
+**Config resolution:** `.agentlint.config.jsonc` in CWD, then `agentlint` key in `package.json`.
 
 ---
 
@@ -749,8 +791,8 @@ agentlint reads Claude Code session logs, which contain full conversation histor
 ```
 agentlint/
 ├── src/
-│   ├── cli/                      # CLI entry points (one file per command)
-│   │   ├── index.ts              # Main entry, command routing
+│   ├── cli/
+│   │   ├── index.ts              # Entry, command routing
 │   │   ├── lint.ts
 │   │   ├── check.ts
 │   │   ├── optimize.ts
@@ -758,57 +800,59 @@ agentlint/
 │   │   ├── status.ts
 │   │   └── report.ts
 │   │
-│   ├── parsers/                  # Instruction file → Rule[]
-│   │   ├── types.ts              # Rule, Diagnostic interfaces
+│   ├── parsers/
+│   │   ├── types.ts              # Rule, Diagnostic
 │   │   ├── claude-md.ts
 │   │   ├── cursorrules.ts
 │   │   ├── agents-md.ts
-│   │   └── auto-detect.ts        # File discovery logic
+│   │   └── auto-detect.ts
 │   │
-│   ├── analyzers/                # Static analysis (lint)
-│   │   ├── token-counter.ts      # js-tiktoken wrapper
-│   │   ├── vague-detector.ts     # Hedging language patterns
-│   │   ├── duplicate-detector.ts # Jaccard similarity
-│   │   ├── conflict-detector.ts  # Negation patterns, tool conflicts
-│   │   ├── version-flagger.ts    # Version reference regex
-│   │   ├── ordering-analyzer.ts  # Priority rule positioning
-│   │   └── deep-analyzer.ts      # LLM-powered analysis (--deep)
+│   ├── analyzers/
+│   │   ├── token-counter.ts
+│   │   ├── vague-detector.ts
+│   │   ├── duplicate-detector.ts
+│   │   ├── conflict-detector.ts
+│   │   ├── version-flagger.ts
+│   │   ├── ordering-analyzer.ts
+│   │   └── deep-analyzer.ts
 │   │
-│   ├── sessions/                 # Claude Code session reading
-│   │   ├── types.ts              # AgentAction types
-│   │   ├── project-resolver.ts   # CWD → ~/.claude/projects/<hash>/
-│   │   ├── session-discovery.ts  # sessions-index.json reader
-│   │   ├── jsonl-parser.ts       # JSONL → AgentAction[] extraction
-│   │   └── session-reader.ts     # Orchestrates resolution + discovery + parsing
+│   ├── sessions/
+│   │   ├── types.ts              # AgentAction
+│   │   ├── project-resolver.ts
+│   │   ├── session-discovery.ts
+│   │   ├── jsonl-parser.ts
+│   │   └── session-reader.ts
 │   │
-│   ├── verifiers/                # Rule adherence verification
-│   │   ├── types.ts              # Observation type
-│   │   ├── auto-mapper.ts        # Rule → verification strategy
-│   │   ├── bash-keyword.ts       # Tool/command keyword matching
-│   │   ├── bash-sequence.ts      # Temporal ordering of commands
-│   │   ├── file-pattern.ts       # File path glob matching
-│   │   ├── ast-check.ts          # Code structure verification
-│   │   ├── custom-check.ts       # User-defined check DSL executor
-│   │   ├── llm-judge.ts          # LLM-as-judge (opt-in)
-│   │   └── verifier-engine.ts    # Orchestrates mapping + execution
+│   ├── verifiers/
+│   │   ├── types.ts              # Observation
+│   │   ├── auto-mapper.ts
+│   │   ├── bash-keyword.ts
+│   │   ├── bash-sequence.ts
+│   │   ├── file-pattern.ts
+│   │   ├── heuristic-structure.ts # regex-based code structure checks
+│   │   ├── custom-check.ts
+│   │   ├── llm-judge.ts
+│   │   └── verifier-engine.ts
 │   │
-│   ├── history/                  # JSONL history store
-│   │   ├── types.ts              # SessionResult interface
-│   │   └── store.ts              # Read/append/query/epoch operations
+│   ├── history/
+│   │   ├── types.ts
+│   │   └── store.ts
 │   │
-│   ├── optimizer/                # Instruction file optimization
-│   │   ├── dropper.ts            # Remove unobserved rules
-│   │   ├── deduplicator.ts       # Merge near-duplicates
-│   │   ├── reorderer.ts          # Reorder by adherence within sections
-│   │   ├── flagger.ts            # Flag consistently violated rules
-│   │   ├── consolidator.ts       # LLM-powered merging (--deep)
-│   │   └── diff-writer.ts        # Generate change explanations
+│   ├── optimizer/
+│   │   ├── deduplicator.ts
+│   │   ├── reorderer.ts
+│   │   ├── flagger.ts
+│   │   ├── consolidator.ts
+│   │   └── diff-writer.ts
 │   │
-│   └── reporters/                # Output formatting
-│       ├── terminal.ts           # Rich terminal output (picocolors)
-│       ├── json.ts               # Machine-readable JSON
-│       ├── markdown.ts           # Markdown (for PRs, docs)
-│       └── html.ts               # Interactive HTML report
+│   └── reporters/
+│       ├── terminal.ts
+│       ├── json.ts
+│       ├── markdown.ts
+│       └── html.ts
+│
+├── fixtures/                     # Captured Claude Code session fixtures
+│   └── README.md                 # Schema documentation from live inspection
 │
 ├── package.json
 ├── tsconfig.json
@@ -819,66 +863,68 @@ agentlint/
 
 ## Key Dependencies
 
-| Package | Purpose | Why this one |
+| Package | Purpose | Why |
 |---|---|---|
 | `commander` or `citty` | CLI framework | Mature, well-typed, minimal |
-| `js-tiktoken` | Token counting (approximate) | Pure JS port of tiktoken, no native deps |
-| `picocolors` | Terminal colors | Tiny, fast, no dependencies |
-| `globby` | Glob matching | Standard, well-maintained |
-| `jsonc-parser` | Config file parsing | Handles JSON with comments, used by VS Code |
-| `@anthropic-ai/sdk` | LLM calls (--deep, llm-judge) | Official SDK, only loaded when needed |
+| `js-tiktoken` | Token counting (approximate) | Pure JS, no native deps |
+| `picocolors` | Terminal colors | Tiny, zero deps |
+| `globby` | Glob matching | Standard |
+| `jsonc-parser` | Config file parsing | Handles comments, used by VS Code |
+| `@anthropic-ai/sdk` | LLM calls (--deep, llm-judge) | Official SDK, lazy-loaded |
 
 **Explicit non-dependencies:**
-- No `better-sqlite3` (native addon, install friction)
-- No `chokidar` — poll `sessions-index.json` rather than using filesystem events
-- No heavy AST parsers at initial launch — start with regex/string analysis for code structure checks, add tree-sitter WASM if accuracy demands it
-- No bundler for the CLI — ship TypeScript compiled to ESM
+- No `better-sqlite3` (native addon friction)
+- No `chokidar` (poll instead)
+- No tree-sitter or ts-morph in v1 (heuristic structure checks first)
+- No bundler (ship compiled ESM)
 
 ---
 
 ## Technical Risks
 
 **Session log format changes.**
-Claude Code's JSONL format is undocumented and could change. Mitigation: defensive parsing (skip unknown fields, don't crash on missing data), integration tests against captured session samples, clear error messages when format is unrecognized. The format has been stable for months and multiple third-party tools depend on it, making silent breaking changes unlikely.
+Undocumented format could change. Mitigation: defensive parsing, integration tests against captured fixtures, clear error on unrecognized format. Multiple third-party tools depend on the format, making silent breaks unlikely.
 
 **Session log schema unknown at spec time.**
-The exact structure of `sessions-index.json` and the project directory hash algorithm have not been confirmed. Mitigation: first implementation task is schema discovery — inspect a live installation and document confirmed fields before writing any parsing code.
+Mitigation: session ingestion is gated — no Tier 2 features ship until fixtures are captured and schema is confirmed.
 
-**Auto-mapper accuracy.**
-Conservative mapping means some rules won't be auto-verified. Users may perceive this as the tool being limited. Mitigation: clear categorization of why rules are unmapped (unverifiable vs needs-config), easy path to user-configured checks, and honest messaging ("14 rules auto-verified, 2 unverifiable, 1 needs custom check").
+**Heuristic verifier accuracy.**
+Regex-based code structure checks will produce false positives/negatives. Mitigation: every observation carries a confidence level. Medium-confidence results are clearly labeled. Users can override with custom checks or llm-judge.
+
+**Compound rule splitting.**
+The parser's sentence-boundary heuristic will sometimes split wrong or fail to split. Mitigation: conservative splitting (only when both halves have independent imperatives). Wrong splits degrade gracefully — the user sees a rule that's too broad rather than a false adherence score.
 
 **Stochastic agent behavior.**
-The same rule might be followed in one session and ignored in the next. Mitigation: report adherence as rates, not booleans. Flag inconsistent rules explicitly. Partial data gets honest confidence warnings. Over time, watch accumulates enough data for stable rates.
+Mitigation: adherence is rates with sample sizes, not booleans.
 
 **Large session files.**
-Long Claude Code sessions produce large JSONL files (potentially 10MB+). Mitigation: stream-parse line by line, don't load entire files into memory. Extract only tool_use blocks, skip everything else.
+Mitigation: stream-parse line by line.
 
 **Token count inaccuracy.**
-We use the GPT-4 tokenizer, not Claude's. Counts may differ by up to ~20%. Mitigation: always display as "~N tokens (estimated)" and document the approximation. For the purposes of relative comparison (is your file getting bigger or smaller), the exact count matters less than the trend.
+Mitigation: displayed as "~N tokens (estimated)".
 
 **Anthropic ships this natively.**
-If Claude Code adds built-in rule analysis, our core value prop shrinks. Mitigation: cross-format support (CLAUDE.md + .cursorrules + AGENTS.md), the community data play (aggregate insights across users), and the optimization loop (lint → check → optimize) which is more than any vendor will build for their own agent.
+Mitigation: the optimization loop (lint → check → optimize) and cross-format lint are more than a vendor will build.
 
 ---
 
 ## Success Metrics
 
+Measured through local-only signals. No telemetry in v1.
+
 ### Phase 1 — Breadth (Month 1)
-Lint drives initial adoption.
-- Installs (npm download count)
-- "Ran lint at least once" (inferred from GitHub issues, tweets, blog mentions)
-- Quality of output: do developers screenshot and share results?
+Lint drives adoption.
+- npm installs
+- GitHub stars, issues, mentions
+- Quality signal: do developers screenshot and share lint results?
 
 ### Phase 2 — Depth (Month 2-3)
 Check and watch create retention.
-- % of lint users who run `check` within 7 days
-- % who configure `watch` within 30 days
-- Repeat usage: how often do returning users run `check` or `status`?
+- GitHub issues requesting session format support for new Claude Code versions
+- Feature requests for custom verifiers (signals power-user engagement)
+- `agentlint optimize` PRs appearing in open-source repos
 
-### Phase 3 — Data moat (Month 3+)
-Community insights become the differentiator.
-- Opt-in rate for anonymized data sharing (when implemented)
-- Dataset size and diversity
-- Research outputs: blog posts, aggregate findings
-
-**Instrumentation:** Build opt-in, anonymous usage tracking hooks from day one (command invoked, rule count, not rule content). Don't enable by default. Have the infrastructure ready so we're collecting data when we flip the switch.
+### Phase 3 — Community (Month 3+)
+- Explicit opt-in data export flows (not background collection)
+- User-contributed verifier recipes shared via GitHub
+- Research outputs: blog posts, aggregate findings from willing participants
