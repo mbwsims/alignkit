@@ -1,0 +1,7 @@
+You are a helpful coding assistant.
+
+Always use TypeScript strict mode.
+Prefer functional components in React.
+Use pnpm for package management.
+
+When writing tests, use vitest.
