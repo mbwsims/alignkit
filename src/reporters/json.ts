@@ -1,0 +1,35 @@
+import type { LintResult } from '../analyzers/types.js';
+import type { Reporter } from './types.js';
+
+export class JsonReporter implements Reporter {
+  report(result: LintResult): string {
+    const diagnostics = result.rules.flatMap((rule) =>
+      rule.diagnostics.map((d) => ({
+        ...d,
+        ruleSlug: rule.slug,
+        ruleText: rule.text,
+      }))
+    );
+
+    const rules = result.rules.map((rule) => ({
+      id: rule.id,
+      slug: rule.slug,
+      text: rule.text,
+      category: rule.category,
+      verifiability: rule.verifiability,
+      source: rule.source,
+      diagnosticCount: rule.diagnostics.length,
+    }));
+
+    const output = {
+      file: result.file,
+      ruleCount: result.rules.length,
+      tokenAnalysis: result.tokenAnalysis,
+      diagnostics,
+      rules,
+      discoveredFiles: result.discoveredFiles,
+    };
+
+    return JSON.stringify(output, null, 2);
+  }
+}
