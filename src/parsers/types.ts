@@ -10,7 +10,8 @@ export type Verifiability = 'auto' | 'user-config' | 'unverifiable';
 
 export interface Diagnostic {
   severity: 'error' | 'warning';
-  code: 'VAGUE' | 'CONFLICT' | 'REDUNDANT' | 'STALE' | 'ORDERING';
+  code: 'VAGUE' | 'CONFLICT' | 'REDUNDANT' | 'STALE' | 'ORDERING'
+    | 'EFFECTIVENESS' | 'COVERAGE_GAP' | 'CONSOLIDATION' | 'REWRITE';
   message: string;
   relatedRuleId?: string;
 }
