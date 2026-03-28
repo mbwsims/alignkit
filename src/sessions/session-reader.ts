@@ -43,15 +43,31 @@ export function readSessions(options: ReadSessionsOptions): SessionData[] {
 
   const indexPath = join(projectDir, 'sessions-index.json');
 
+  // Collect session IDs we've already processed (to avoid duplicates
+  // when both index and direct file scan find the same session)
+  const seen = new Set<string>();
+
   if (existsSync(indexPath)) {
-    // Strategy: use sessions-index.json
+    // Strategy 1: use sessions-index.json
     const indexData = JSON.parse(readFileSync(indexPath, 'utf8')) as {
       entries?: SessionEntry[];
     };
 
+    // Match sessions where projectPath matches CWD, or either is a
+    // parent of the other. This handles monorepos where CWD is the root
+    // but sessions were started from sub-packages, or vice versa.
     const entries = (indexData.entries ?? []).filter(
-      (entry) => entry.projectPath === cwd,
+      (entry) =>
+        entry.projectPath === cwd ||
+        entry.projectPath.startsWith(cwd + '/') ||
+        cwd.startsWith(entry.projectPath + '/'),
     );
+
+    // Mark all matched entries as seen (even if filtered by `since`)
+    // so the fallback file scan doesn't re-include them.
+    for (const entry of entries) {
+      seen.add(entry.sessionId);
+    }
 
     const filteredEntries = since
       ? entries.filter((entry) => new Date(entry.modified).getTime() > since.getTime())
@@ -72,21 +88,25 @@ export function readSessions(options: ReadSessionsOptions): SessionData[] {
         actions.push(...subagentActions);
       }
 
+      seen.add(entry.sessionId);
       sessions.push({
         sessionId: entry.sessionId,
         actions,
         timestamp: entry.modified,
       });
     }
-  } else {
-    // Fallback: list JSONL files directly
+  }
+
+  // Strategy 2: also scan for JSONL files not listed in the index.
+  // The index may be incomplete (not all sessions get indexed).
+  {
     let files: string[];
     try {
       files = readdirSync(projectDir)
         .filter((f) => f.endsWith('.jsonl'))
         .map((f) => join(projectDir, f));
     } catch {
-      return [];
+      files = [];
     }
 
     for (const filePath of files) {
@@ -98,10 +118,11 @@ export function readSessions(options: ReadSessionsOptions): SessionData[] {
       // Filter by mtime if since is set
       if (since && stat.mtimeMs <= since.getTime()) continue;
 
-      const actions = parseSessionFile(filePath);
-
-      // Extract sessionId from first line
+      // Extract sessionId and skip if already processed from index
       const sessionId = extractSessionId(filePath) ?? basename(filePath, '.jsonl');
+      if (seen.has(sessionId)) continue;
+
+      const actions = parseSessionFile(filePath);
 
       // Determine timestamp from first action or file mtime
       const timestamp =
@@ -115,6 +136,7 @@ export function readSessions(options: ReadSessionsOptions): SessionData[] {
         actions.push(...subagentActions);
       }
 
+      seen.add(sessionId);
       sessions.push({
         sessionId,
         actions,
