@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TerminalReporter } from '../../src/reporters/terminal.js';
 import { makeRule } from '../analyzers/helpers.js';
-import type { LintResult } from '../../src/analyzers/types.js';
+import type { LintResult, DeepAnalysisResult } from '../../src/analyzers/types.js';
 import type { Diagnostic } from '../../src/parsers/types.js';
 
 function makeLintResult(overrides?: Partial<LintResult>): LintResult {
@@ -103,5 +103,75 @@ describe('TerminalReporter', () => {
     const result = makeLintResult({ rules });
     const output = stripAnsi(reporter.report(result));
     expect(output).toContain('3 rules');
+  });
+
+  it('shows EFFECTIVENESS section when deepAnalysis has a LOW effectiveness rule', () => {
+    const reporter = new TerminalReporter();
+    const rule = makeRule('Always be helpful');
+    const deepAnalysis: DeepAnalysisResult = {
+      effectiveness: [
+        {
+          ruleId: rule.id,
+          level: 'LOW',
+          reason: 'Too vague to be actionable',
+          suggestedRewrite: 'Use specific tone guidelines',
+        },
+      ],
+      coverageGaps: [],
+      consolidation: [],
+    };
+    const result = makeLintResult({ rules: [rule], deepAnalysis });
+    const output = stripAnsi(reporter.report(result));
+    expect(output).toContain('EFFECTIVENESS');
+    expect(output).toContain('LOW');
+  });
+
+  it('shows COVERAGE GAPS section with area name when deepAnalysis has coverage gaps', () => {
+    const reporter = new TerminalReporter();
+    const deepAnalysis: DeepAnalysisResult = {
+      effectiveness: [],
+      coverageGaps: [
+        {
+          area: 'Error Handling',
+          description: 'No rules cover error handling patterns',
+          evidence: 'No rule mentions exceptions or errors',
+        },
+      ],
+      consolidation: [],
+    };
+    const result = makeLintResult({ deepAnalysis });
+    const output = stripAnsi(reporter.report(result));
+    expect(output).toContain('COVERAGE GAPS');
+    expect(output).toContain('Error Handling');
+  });
+
+  it('shows CONSOLIDATION section with MERGE when deepAnalysis has consolidation suggestions', () => {
+    const reporter = new TerminalReporter();
+    const rule1 = makeRule('Use pnpm for installs');
+    const rule2 = makeRule('Use pnpm for scripts');
+    const deepAnalysis: DeepAnalysisResult = {
+      effectiveness: [],
+      coverageGaps: [],
+      consolidation: [
+        {
+          ruleIds: [rule1.id, rule2.id],
+          mergedText: 'Use pnpm for all package operations and scripts',
+          tokenSavings: 10,
+        },
+      ],
+    };
+    const result = makeLintResult({ rules: [rule1, rule2], deepAnalysis });
+    const output = stripAnsi(reporter.report(result));
+    expect(output).toContain('CONSOLIDATION');
+    expect(output).toContain('MERGE');
+  });
+
+  it('does not show deep analysis sections when deepAnalysis is undefined', () => {
+    const reporter = new TerminalReporter();
+    const result = makeLintResult({ deepAnalysis: undefined });
+    const output = stripAnsi(reporter.report(result));
+    expect(output).not.toContain('EFFECTIVENESS');
+    expect(output).not.toContain('COVERAGE GAPS');
+    expect(output).not.toContain('CONSOLIDATION');
   });
 });

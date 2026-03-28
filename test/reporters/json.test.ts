@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { JsonReporter } from '../../src/reporters/json.js';
 import { makeRule } from '../analyzers/helpers.js';
-import type { LintResult } from '../../src/analyzers/types.js';
+import type { LintResult, DeepAnalysisResult } from '../../src/analyzers/types.js';
 import type { Diagnostic } from '../../src/parsers/types.js';
 
 function makeLintResult(overrides?: Partial<LintResult>): LintResult {
@@ -93,5 +93,51 @@ describe('JsonReporter', () => {
     expect(r.verifiability).toBe(rule.verifiability);
     expect(r.source).toBeDefined();
     expect(r.diagnosticCount).toBe(0);
+  });
+
+  it('includes deepAnalysis field with correct structure when deepAnalysis is present', () => {
+    const reporter = new JsonReporter();
+    const rule = makeRule('Always be helpful');
+    const deepAnalysis: DeepAnalysisResult = {
+      effectiveness: [
+        {
+          ruleId: rule.id,
+          level: 'LOW',
+          reason: 'Too vague to be actionable',
+          suggestedRewrite: 'Use specific tone guidelines',
+        },
+      ],
+      coverageGaps: [
+        {
+          area: 'Error Handling',
+          description: 'No rules cover error handling',
+          evidence: 'No rule mentions exceptions',
+        },
+      ],
+      consolidation: [
+        {
+          ruleIds: [rule.id],
+          mergedText: 'Use specific tone guidelines for all responses',
+          tokenSavings: 5,
+        },
+      ],
+    };
+    const result = makeLintResult({ rules: [rule], deepAnalysis });
+    const output = JSON.parse(reporter.report(result));
+    expect(output.deepAnalysis).toBeDefined();
+    expect(output.deepAnalysis.effectiveness).toHaveLength(1);
+    expect(output.deepAnalysis.effectiveness[0].ruleId).toBe(rule.id);
+    expect(output.deepAnalysis.effectiveness[0].level).toBe('LOW');
+    expect(output.deepAnalysis.coverageGaps).toHaveLength(1);
+    expect(output.deepAnalysis.coverageGaps[0].area).toBe('Error Handling');
+    expect(output.deepAnalysis.consolidation).toHaveLength(1);
+    expect(output.deepAnalysis.consolidation[0].tokenSavings).toBe(5);
+  });
+
+  it('does not include deepAnalysis field when deepAnalysis is absent', () => {
+    const reporter = new JsonReporter();
+    const result = makeLintResult({ deepAnalysis: undefined });
+    const output = JSON.parse(reporter.report(result));
+    expect(output.deepAnalysis).toBeUndefined();
   });
 });
