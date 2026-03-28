@@ -21,7 +21,7 @@ export class JsonReporter implements Reporter {
       diagnosticCount: rule.diagnostics.length,
     }));
 
-    const output = {
+    const output: Record<string, unknown> = {
       file: result.file,
       ruleCount: result.rules.length,
       tokenAnalysis: result.tokenAnalysis,
@@ -29,6 +29,10 @@ export class JsonReporter implements Reporter {
       rules,
       discoveredFiles: result.discoveredFiles,
     };
+
+    if (result.deepAnalysis !== undefined) {
+      output.deepAnalysis = result.deepAnalysis;
+    }
 
     return JSON.stringify(output, null, 2);
   }

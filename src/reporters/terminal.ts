@@ -86,6 +86,53 @@ export class TerminalReporter implements Reporter {
       `${pc.bold('TOKENS')}  ${result.tokenAnalysis.overBudget ? pc.red(tokenSummary) : tokenSummary}`
     );
 
+    // Deep analysis sections
+    if (result.deepAnalysis) {
+      const ruleMap = new Map(result.rules.map((r: Rule) => [r.id, r]));
+
+      // EFFECTIVENESS PREDICTIONS — skip HIGH, show MEDIUM and LOW
+      const effectivenessItems = result.deepAnalysis.effectiveness.filter(
+        (e) => e.level !== 'HIGH'
+      );
+      if (effectivenessItems.length > 0) {
+        lines.push('');
+        lines.push(pc.bold('EFFECTIVENESS PREDICTIONS'));
+        for (const item of effectivenessItems) {
+          const rule = ruleMap.get(item.ruleId);
+          const ruleText = rule ? truncate(rule.text) : item.ruleId;
+          const icon = item.level === 'LOW' ? pc.red('⚠') : pc.yellow('⚠');
+          const levelLabel = item.level === 'LOW' ? pc.red(item.level.padEnd(6)) : pc.yellow(item.level.padEnd(6));
+          lines.push(`  ${icon} ${levelLabel}  "${ruleText}"`);
+          if (item.suggestedRewrite) {
+            lines.push(`           ${item.reason}. Rewrite: "${item.suggestedRewrite}"`);
+          } else {
+            lines.push(`           ${item.reason}`);
+          }
+        }
+      }
+
+      // COVERAGE GAPS
+      if (result.deepAnalysis.coverageGaps.length > 0) {
+        lines.push('');
+        lines.push(pc.bold('COVERAGE GAPS'));
+        for (const gap of result.deepAnalysis.coverageGaps) {
+          lines.push(`  ${pc.red('✗')} ${'MISSING'.padEnd(7)}  ${gap.area}`);
+          lines.push(`           ${gap.description} (${gap.evidence})`);
+        }
+      }
+
+      // CONSOLIDATION
+      if (result.deepAnalysis.consolidation.length > 0) {
+        lines.push('');
+        lines.push(pc.bold('CONSOLIDATION'));
+        for (const item of result.deepAnalysis.consolidation) {
+          const ids = item.ruleIds.join(', ');
+          lines.push(`  ${pc.yellow('⚠')} ${'MERGE'.padEnd(7)}  Rules ${ids} could merge (saves ~${item.tokenSavings} tokens)`);
+          lines.push(`           "${truncate(item.mergedText)}"`);
+        }
+      }
+    }
+
     return lines.join('\n');
   }
 }

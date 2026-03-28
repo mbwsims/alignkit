@@ -99,7 +99,12 @@ export function registerLintCommand(program: Command): void {
 
         // Deep analysis if requested
         if (options.deep) {
-          await analyzeDeep(rules, cwd);
+          const deepResult = await analyzeDeep(rules, cwd);
+          if (deepResult !== undefined) {
+            rules = deepResult.rules;
+            result.rules = deepResult.rules;
+            result.deepAnalysis = deepResult.result;
+          }
         }
 
         // Print formatted output for this file
