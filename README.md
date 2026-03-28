@@ -172,13 +172,16 @@ Optional. Everything works with zero configuration.
 
 ## Privacy
 
-alignkit reads Claude Code session logs locally. Here's exactly what happens with your data:
+**By default, alignkit is fully local.** The core commands — `lint`, `check`, `watch`, `status`, `report`, `optimize` — never make network requests. Your instruction files, session logs, and source code stay on your machine.
 
-| Mode | Reads | Stores | Transmits |
-|---|---|---|---|
-| **Default** (lint, check, watch, status, report, optimize) | Instruction files, session tool_use blocks | Rule IDs + boolean verdicts only | Nothing |
-| **--deep** | + project structure (directory names, dependency names) | Same | Rule text + project metadata to Anthropic API |
-| **llm-judge** (opt-in per rule) | + Write/Edit content | Same | Rule text + source code to Anthropic API |
+**Two opt-in features make API calls:**
+
+| Feature | What you opt into | What's sent to the Anthropic API |
+|---|---|---|
+| `--deep` | LLM-powered analysis | Rule text + project metadata (directory names, dependency names). **Not** source code. |
+| `llm-judge` (per-rule config) | LLM-based rule verification | Rule text + source code written by the agent. |
+
+Both require you to set `ANTHROPIC_API_KEY` — they literally cannot run without it. If you never set the key, nothing ever leaves your machine.
 
 No telemetry. No analytics. No phone-home. Add `.alignkit/` to your `.gitignore`.
 
