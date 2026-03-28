@@ -44,6 +44,16 @@ function hasSharedKeywords(textA: string, textB: string): boolean {
   return [...wordsA].some((w) => wordsB.has(w));
 }
 
+/**
+ * Extract the verb phrase after always/never/don't.
+ * E.g., "Always show user feedback" → "show"
+ *       "NEVER swallow errors" → "swallow"
+ */
+function extractActionVerb(text: string): string | null {
+  const match = text.match(/\b(?:always|never|don'?t|do not)\s+(\w+)/i);
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
 function isNegationConflict(textA: string, textB: string): boolean {
   const lowerA = textA.toLowerCase();
   const lowerB = textB.toLowerCase();
@@ -62,7 +72,20 @@ function isNegationConflict(textA: string, textB: string): boolean {
     (aHasDontUse && bHasAlways);
 
   if (!negationMatch) return false;
-  return hasSharedKeywords(textA, textB);
+
+  // Require that the action verb after always/never is the SAME word,
+  // not just any shared keyword. "Always show" vs "Never show" = conflict.
+  // "Always show" vs "Never swallow" = complementary, not a conflict.
+  const verbA = extractActionVerb(textA);
+  const verbB = extractActionVerb(textB);
+  if (verbA && verbB && verbA === verbB) return true;
+
+  // Fallback: if we can't extract verbs, check for high keyword overlap
+  // (more than one shared meaningful word, suggesting the same topic AND action)
+  const wordsA = extractMeaningfulWords(textA);
+  const wordsB = extractMeaningfulWords(textB);
+  const shared = [...wordsA].filter((w) => wordsB.has(w));
+  return shared.length >= 3;
 }
 
 export function detectConflicts(rules: Rule[]): Rule[] {
