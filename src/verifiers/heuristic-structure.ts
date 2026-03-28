@@ -97,6 +97,113 @@ const CHECKS: StructureCheck[] = [
       return { relevant: true, followed: !hasLet };
     },
   },
+  {
+    // "no any" / "avoid any" / "use unknown instead of any"
+    matches: (t) =>
+      /\bno\s+`?any`?\b/i.test(t) ||
+      /\bavoid\s+`?any`?\b/i.test(t) ||
+      /`any`.*`unknown`/i.test(t) ||
+      /`unknown`.*`any`/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions);
+      if (contents.length === 0) return { relevant: false, followed: null };
+
+      // Check for `: any`, `as any`, `<any>` patterns (not just the word "any")
+      const hasAny = contents.some((c) => /:\s*any\b|as\s+any\b|<any>/.test(c));
+      return { relevant: true, followed: !hasAny };
+    },
+  },
+  {
+    // "use early returns" / "avoid nested conditionals"
+    matches: (t) =>
+      /\bearly\s+return/i.test(t) ||
+      /\bnested\s+conditional/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions);
+      if (contents.length === 0) return { relevant: false, followed: null };
+
+      // Heuristic: deeply nested if/else blocks (3+ levels of indentation after if)
+      const deepNesting = contents.some((c) => /^\s{8,}(if|else)\b/m.test(c));
+      return { relevant: true, followed: !deepNesting };
+    },
+  },
+  {
+    // "never swallow errors" / "don't swallow errors" / error handling
+    matches: (t) =>
+      /\bswallow.*error/i.test(t) ||
+      /\bempty\s+catch/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions);
+      if (contents.length === 0) return { relevant: false, followed: null };
+
+      // Check for empty catch blocks: catch { } or catch(e) { }
+      const hasEmptyCatch = contents.some((c) =>
+        /catch\s*\([^)]*\)\s*\{\s*\}/s.test(c) ||
+        /catch\s*\{\s*\}/s.test(c)
+      );
+      return { relevant: true, followed: !hasEmptyCatch };
+    },
+  },
+  {
+    // "always have onError handler" / error handler patterns
+    matches: (t) =>
+      /\bonError\b/.test(t) ||
+      /\berror\s+handler/i.test(t) ||
+      /\b\.catch\b/.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions);
+      if (contents.length === 0) return { relevant: false, followed: null };
+
+      // Check for error handling patterns in async code
+      const hasErrorHandling = contents.some((c) =>
+        /\.catch\s*\(/.test(c) ||
+        /onError\s*[=:]/.test(c) ||
+        /catch\s*\([^)]+\)\s*\{[^}]+\}/.test(c) ||
+        /try\s*\{/.test(c)
+      );
+      return { relevant: true, followed: hasErrorHandling };
+    },
+  },
+  {
+    // "prefer interface over type" / "use interface not type"
+    matches: (t) =>
+      /\binterface\b.*\btype\b/i.test(t) ||
+      /\bprefer\s+`?interface/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions);
+      if (contents.length === 0) return { relevant: false, followed: null };
+
+      const hasInterface = contents.some((c) => /\binterface\s+\w+/m.test(c));
+      const hasTypeAlias = contents.some((c) => /\btype\s+\w+\s*=/m.test(c));
+      // If both exist, that's fine (spec says except unions/intersections)
+      // Only flag if type aliases exist but no interfaces
+      if (!hasInterface && !hasTypeAlias) return { relevant: false, followed: null };
+      return { relevant: true, followed: hasInterface };
+    },
+  },
+  {
+    // "use factory pattern" / "getMockX(overrides)"
+    matches: (t) =>
+      /\bfactory\s+pattern/i.test(t) ||
+      /getMock\w*\(/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions);
+      // Only relevant for test files
+      const testContents = actions
+        .filter((a): a is Extract<AgentAction, { type: 'write' }> =>
+          a.type === 'write' && /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(a.filePath))
+        .map((a) => a.content);
+      if (testContents.length === 0) return { relevant: false, followed: null };
+
+      const hasFactory = testContents.some((c) =>
+        /\bgetMock\w*\s*\(/.test(c) ||
+        /\bcreate\w*Mock\s*\(/.test(c) ||
+        /\bbuild\w*\s*\(.*override/i.test(c) ||
+        /factory/i.test(c)
+      );
+      return { relevant: true, followed: hasFactory };
+    },
+  },
 ];
 
 export function verifyHeuristicStructure(

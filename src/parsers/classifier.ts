@@ -9,7 +9,7 @@ const PATTERNS: Array<{ category: RuleCategory; pattern: RegExp }> = [
   {
     category: 'code-structure',
     pattern:
-      /\b(named exports?|default exports?|imports?|types?|interfaces?|class(?:es)?|async|await|strict mode|module|function|const|let|var|enum|namespace|generics?|abstraction|CommonJS|ESM|arrow function|spread operator)\b/i,
+      /\b(named exports?|default exports?|imports?|interfaces?|class(?:es)?|async|await|strict mode|module|function|const|let|var|enum|namespace|generics?|abstraction|CommonJS|ESM|arrow function|spread operator|early returns?|nested conditionals?|composition|inheritance|factory pattern|error handl|catch\b|onError|swallow.*errors?)\b|`any`|`unknown`|`type`|`interface`/i,
   },
   {
     category: 'process-ordering',
