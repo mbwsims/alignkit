@@ -370,54 +370,62 @@ For rules flagged as vague by the static analyzer, generate specific rewrites in
 
 Reads Claude Code session logs from `~/.claude/projects/`.
 
-**⚠ Implementation gate:** This component cannot be built from spec assumptions alone. Before writing any parsing code:
+**Schema status: CONFIRMED** — inspected against Claude Code v2.1.78 (March 2026). Full schema documented in `fixtures/SCHEMA.md`.
 
-1. Inspect a live Claude Code installation's `~/.claude/` directory structure
-2. Capture fixture files from at least 3 projects (different sizes, monorepo and single-repo)
-3. Document the confirmed schema:
-   - Project directory naming (hash algorithm, path encoding)
-   - `sessions-index.json` schema (field names, types, what `projectPath` looks like when multiple projects share an index)
-   - JSONL line variants (not all lines are `{ type, message }` — document all observed shapes)
-   - Tool_use block schema (field names within `input` for each tool type)
-   - Compaction markers (exact field name and value)
-4. Write integration tests against captured fixtures before building the reader
+**Project resolution:**
+Claude Code stores sessions under `~/.claude/projects/<path-encoded-dir>/`. Directory names use path encoding: every `/` becomes `-` (e.g., `/Users/msims/Documents/GitHub/agent-lint` → `-Users-msims-Documents-GitHub-agent-lint`).
 
-The schema documented below is our best understanding and WILL be revised after step 3.
-
-**Project resolution (to be confirmed):**
-Claude Code stores sessions under `~/.claude/projects/<dir>/`. The session reader:
-1. Scans `~/.claude/projects/` subdirectories
-2. Reads each subdirectory's index to find the project path
-3. Matches the current working directory to the correct project directory
+The session reader:
+1. Encodes CWD using path-encoding rules to get expected directory name
+2. Checks if `~/.claude/projects/<encoded>/` exists
+3. If not, falls back to scanning all project directories and checking `sessions-index.json` entries for matching `projectPath`
 4. Fails clearly if no match: "No Claude Code sessions found for this project directory."
 
 **Session discovery:**
-From the matched project directory, read session metadata. Filter to sessions after the instruction file's last modification date:
-1. `git log -1 --format=%cI -- <instruction-file>` (if in a git repo and file is tracked)
-2. Filesystem `mtime` of the instruction file (fallback for non-git projects or untracked files)
+Two strategies depending on project state:
 
-**JSONL parsing (to be confirmed):**
-For each relevant session, stream-parse the JSONL file(s) line by line:
-1. Skip compaction markers
-2. From assistant messages, extract tool_use content blocks
-3. Map tool_use blocks to `AgentAction` objects:
-   - Bash tool → `BashAction` with command string
-   - Write tool → `WriteAction` with file path and content
-   - Edit tool → `EditAction` with file path and old/new content
-   - Read tool → `ReadAction` with file path
-4. Extract timestamps for ordering analysis
+*With sessions-index.json* (multi-session projects):
+- Read `entries` array, filter by `projectPath` matching CWD
+- Use `created`/`modified` timestamps and `fullPath` to locate JSONL files
+- Note: one index can contain entries with different `projectPath` values (monorepo sub-packages)
+
+*Without sessions-index.json* (newer/single-session projects):
+- List `*.jsonl` files directly in the project directory (excluding `subagents/`)
+- Use file mtime for session timestamp ordering
+
+Filter to sessions after the instruction file's last modification date:
+1. `git log -1 --format=%cI -- <instruction-file>` (if in a git repo and file is tracked)
+2. Filesystem `mtime` (fallback)
+
+**JSONL parsing:**
+Session files contain multiple line types. Only `assistant` lines contain tool actions. For each session JSONL file, stream-parse line by line:
+
+1. Parse each line as JSON
+2. Skip lines where `type` is NOT `assistant` (skip `progress`, `agent_progress`, `hook_progress`, `queue-operation`, `system`, `last-prompt`, `user`)
+3. From `assistant` lines, access `message.content` array
+4. Filter content blocks where `type === 'tool_use'`
+5. Map tool_use blocks to `AgentAction` objects based on `name` field:
+   - `name: "Bash"` → `{ type: 'bash', command: input.command, timestamp }`
+   - `name: "Write"` → `{ type: 'write', filePath: input.file_path, content: input.content, timestamp }`
+   - `name: "Edit"` → `{ type: 'edit', filePath: input.file_path, oldContent: input.old_string, newContent: input.new_string, timestamp }`
+   - `name: "Read"` → `{ type: 'read', filePath: input.file_path, timestamp }`
+6. Ignore other tool names (Agent, Glob, Grep, TodoWrite, etc.)
+7. Extract `timestamp` from the line-level `timestamp` field
+
+**Subagent sessions:**
+Subagent work is stored in `subagents/agent-{agentId}.jsonl` files with the same format. The session reader INCLUDES subagent files when parsing a session, since delegated work (e.g., a subagent running tests) should count toward rule adherence.
 
 **Active session handling:**
-Skip sessions whose last-modified time is less than 2 minutes ago.
+Skip JSONL files whose filesystem mtime is less than 2 minutes ago.
 
 **Error handling:**
 - Malformed JSON lines: skip and continue (log warning)
-- Missing fields: skip that action (don't crash)
-- Unknown tool names: ignore
-- Unrecognized line format: skip with warning (not crash — formats may have variants we haven't seen)
+- Missing fields in tool_use blocks: skip that action (don't crash)
+- Unknown tool names: ignore (we only extract Bash, Write, Edit, Read)
+- Unrecognized line types: skip silently (the format has many line types we don't need)
 - No sessions found: report clearly with count before filter date
 
-**Implementation note:** We implement our own parser scoped to tool_use extraction, not a general session renderer.
+**Implementation note:** We implement our own parser scoped to tool_use extraction from `assistant` lines. We do NOT parse `user` lines, `progress` lines, or thinking blocks.
 
 ### 5. Verifier Engine
 
