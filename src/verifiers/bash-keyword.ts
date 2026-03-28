@@ -9,6 +9,19 @@ const TOOL_CATEGORIES: string[][] = [
   ['git'],
   ['docker', 'podman'],
   ['eslint', 'prettier', 'biome'],
+  ['webpack', 'vite', 'turbopack', 'esbuild'],
+];
+
+/** Individual tool keywords that can appear in bash commands. */
+const KNOWN_TOOLS = [
+  'pnpm', 'npm', 'yarn', 'bun', 'npx',
+  'jest', 'mocha', 'vitest', 'ava', 'pytest',
+  'git', 'docker', 'podman',
+  'eslint', 'prettier', 'biome',
+  'webpack', 'vite', 'turbopack', 'esbuild',
+  'prisma', 'tsc', 'node', 'deno',
+  'pip', 'cargo', 'go', 'make', 'brew', 'apt',
+  'next', 'nuxt', 'remix',
 ];
 
 /**
@@ -79,6 +92,8 @@ export function verifyBashKeyword(
 
   // --- Generic "use X" or mentions a single tool ---
   const lowerText = rule.text.toLowerCase();
+
+  // First check category-based tools (can verify preferred vs forbidden)
   for (const cat of TOOL_CATEGORIES) {
     for (const tool of cat) {
       if (lowerText.includes(tool)) {
@@ -88,6 +103,29 @@ export function verifyBashKeyword(
         const toolUsed = cmds.some((c) => commandMentions(c, tool));
         return { ...base, relevant: true, followed: toolUsed };
       }
+    }
+  }
+
+  // Fallback: check individual tool keywords not in a category
+  // For these we can only verify "was this tool used?" not "was the right tool used?"
+  for (const tool of KNOWN_TOOLS) {
+    if (lowerText.includes(tool)) {
+      const toolUsed = cmds.some((c) => commandMentions(c, tool));
+      if (toolUsed) {
+        return { ...base, relevant: true, followed: true };
+      }
+      // Tool mentioned in rule but not used — only relevant if session had related commands
+      // (avoid marking as "violated" just because the tool wasn't needed in this session)
+      return { ...base, relevant: false };
+    }
+  }
+
+  // Also check for backtick-wrapped commands in rule text: `pnpm test`, `npx prisma`
+  const backtickCmd = rule.text.match(/`([^`]+)`/);
+  if (backtickCmd) {
+    const cmdText = backtickCmd[1].trim().split(/\s+/)[0]; // first word
+    if (cmdText && cmds.some((c) => commandMentions(c, cmdText))) {
+      return { ...base, relevant: true, followed: true };
     }
   }
 

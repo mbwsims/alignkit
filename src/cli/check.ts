@@ -303,6 +303,11 @@ export function registerCheckCommand(program: Command): void {
           continue;
         }
 
+        // When --fresh, remove old entry before re-appending
+        if (options.fresh && store.hasSession(session.sessionId)) {
+          store.removeSession(session.sessionId);
+        }
+
         const observations = verifySession(rules, session.actions, session.sessionId);
         const result: SessionResult = {
           sessionId: session.sessionId,

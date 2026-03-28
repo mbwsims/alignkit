@@ -71,6 +71,13 @@ export class HistoryStore {
     return hash.slice(0, 12);
   }
 
+  /** Remove a session from history (for --fresh re-analysis). */
+  removeSession(sessionId: string): void {
+    const results = this.readAll().filter((r) => r.sessionId !== sessionId);
+    this.ensureDir();
+    writeFileSync(this.historyPath, results.map((r) => JSON.stringify(r)).join('\n') + (results.length > 0 ? '\n' : ''), 'utf-8');
+  }
+
   /** Get all sessions for a specific rules version (epoch). */
   queryByEpoch(rulesVersion: string): SessionResult[] {
     return this.readAll().filter((r) => r.rulesVersion === rulesVersion);
