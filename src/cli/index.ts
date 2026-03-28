@@ -2,6 +2,8 @@
 import { Command } from 'commander';
 import { registerLintCommand } from './lint.js';
 import { registerCheckCommand } from './check.js';
+import { registerWatchCommand } from './watch.js';
+import { registerStatusCommand } from './status.js';
 
 const program = new Command();
 
@@ -12,5 +14,7 @@ program
 
 registerLintCommand(program);
 registerCheckCommand(program);
+registerWatchCommand(program);
+registerStatusCommand(program);
 
 program.parse();
