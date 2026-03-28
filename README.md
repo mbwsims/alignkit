@@ -5,7 +5,7 @@ Instruction intelligence for coding agents.
 alignkit analyzes, measures, and optimizes the instruction files (CLAUDE.md, .cursorrules, AGENTS.md) that control AI coding agents. It tells you which rules are vague, which are being ignored, and how to make your instructions more effective.
 
 ```bash
-npx alignkit lint
+npx alignkit
 ```
 
 ---
@@ -24,6 +24,9 @@ alignkit gives you visibility into what's actually happening:
 
 ```bash
 # Analyze your instruction file (zero config, zero cost)
+npx alignkit
+
+# Same thing, explicit
 npx alignkit lint
 
 # Check which rules the agent actually follows

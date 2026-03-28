@@ -21,4 +21,13 @@ registerStatusCommand(program);
 registerReportCommand(program);
 registerOptimizeCommand(program);
 
+// Default to lint when no subcommand is given
+// e.g., `npx alignkit` runs lint, `npx alignkit --deep` runs lint --deep
+if (process.argv.length <= 2 || (process.argv.length > 2 && !process.argv.slice(2).some(arg =>
+  ['lint', 'check', 'watch', 'status', 'report', 'optimize', 'help', '--help', '-h', '--version', '-V'].includes(arg)
+))) {
+  // Insert 'lint' as the subcommand
+  process.argv.splice(2, 0, 'lint');
+}
+
 program.parse();
