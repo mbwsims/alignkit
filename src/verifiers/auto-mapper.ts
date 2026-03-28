@@ -46,5 +46,5 @@ function hasOrderingSignals(text: string): boolean {
 
 /** Detect tool/command mentions in rule text. */
 function hasToolSignals(text: string): boolean {
-  return /\b(?:pnpm|npm|yarn|bun|jest|vitest|mocha|git|docker|eslint|prettier|biome)\b/i.test(text);
+  return /\b(?:pnpm|npm|yarn|bun|npx|pip|brew|apt|cargo|make|git|docker|pytest|jest|vitest|mocha|eslint|prettier|biome|prisma|next|tsc|node)\b/i.test(text);
 }

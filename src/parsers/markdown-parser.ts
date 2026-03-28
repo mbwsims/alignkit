@@ -8,15 +8,66 @@ const SPLIT_VERBS = /\b(always|never|use|run|create|prefer)\b/i;
 // Conditional prefixes that prevent splitting on the first sentence
 const CONDITIONAL_PREFIXES = /^(when|if|for|during)\b/i;
 
-// Imperative verbs that mark a paragraph as normative
-const NORMATIVE_PATTERN =
-  /\b(always|never|must|should|use|run|create|prefer|avoid|ensure|write|do not|don't|make sure)\b/i;
+// Patterns that mark text as normative (an instruction or constraint).
+// Includes imperative verbs AND declarative constraint patterns.
+const NORMATIVE_PATTERN = new RegExp(
+  [
+    // Imperative verbs
+    /\b(always|never|must|should|use|run|create|prefer|avoid|ensure|write|do not|don't|make sure|keep)\b/,
+    // Declarative constraints: "X for all Y", "no X except Y", "only X"
+    /\b(for all|no\s+\w+\s+(except|unless)|not\s+\w+\s+(except|unless)|only)\b/,
+    // Convention declarations: "TypeScript strict mode" (bare noun phrase under a conventions/rules heading)
+    // These are handled by section context below, not by this pattern.
+  ]
+    .map((r) => r.source)
+    .join('|'),
+  'i',
+);
+
+// Patterns that indicate documentation/reference, not instructions.
+// These are filtered out even if they contain normative-looking words.
+const DOCUMENTATION_PATTERNS = [
+  // Bold-prefixed architecture descriptions: "**Framework:** Next.js 16"
+  /^\*\*\w[^*]*\*\*[:\s]/,
+  // API route documentation: "`GET /health` — Health check"
+  /^`(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+\//,
+  // Command reference with em-dash description: "`pnpm dev` — Start dev server"
+  /^`[^`]+`\s*[—–-]\s+\w/,
+  // Bare file paths or directory descriptions
+  /^`?[a-zA-Z_/.]+\/[a-zA-Z_/.]+`?\s*[—–-]/,
+];
 
 interface RawRule {
   text: string;
   section: string | null;
   lineStart: number;
   lineEnd: number;
+}
+
+// Section headings that indicate their content is normative (rules/conventions)
+const NORMATIVE_SECTIONS =
+  /\b(conventions?|rules?|requirements?|constraints?|principles?|guidelines?|standards?|directives?|must|do not|important|style|practices?|policies?|workflow)\b/i;
+
+/**
+ * Determine if text is a normative instruction (vs documentation/reference).
+ * Uses both text content and section context.
+ */
+function isNormative(text: string, section: string | null = null): boolean {
+  // Filter out documentation patterns first — these are never rules
+  if (DOCUMENTATION_PATTERNS.some((p) => p.test(text))) {
+    return false;
+  }
+  // Explicit normative language in the text itself
+  if (NORMATIVE_PATTERN.test(text)) {
+    return true;
+  }
+  // Items under normative section headings are treated as rules
+  // even without explicit imperative verbs (e.g., "TypeScript strict mode"
+  // under "## Key Conventions")
+  if (section && NORMATIVE_SECTIONS.test(section)) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -70,7 +121,7 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
     if (!joined) return;
 
     // Only add if the paragraph contains normative (imperative) language
-    if (NORMATIVE_PATTERN.test(joined)) {
+    if (isNormative(joined, currentSection)) {
       rawRules.push({
         text: joined,
         section: currentSection,
@@ -111,12 +162,18 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
     const listMatch = line.match(/^[-*]\s+(.+)$/) ?? line.match(/^\d+\.\s+(.+)$/);
     if (listMatch) {
       flushParagraph();
-      rawRules.push({
-        text: listMatch[1].trim(),
-        section: currentSection,
-        lineStart: lineNum,
-        lineEnd: lineNum,
-      });
+      const itemText = listMatch[1].trim();
+      // Only add list items that contain normative language.
+      // This filters out documentation items like "**Framework:** Next.js 16"
+      // and command references like "`pnpm dev` — Start dev server".
+      if (isNormative(itemText, currentSection)) {
+        rawRules.push({
+          text: itemText,
+          section: currentSection,
+          lineStart: lineNum,
+          lineEnd: lineNum,
+        });
+      }
       continue;
     }
 

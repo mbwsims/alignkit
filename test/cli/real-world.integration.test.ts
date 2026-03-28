@@ -28,18 +28,20 @@ describe('real-world CLAUDE.md integration', () => {
     expect(status).toBe(0);
   });
 
-  it('produces a reasonable rule count (>3 and <100)', () => {
+  it('produces a reasonable rule count (only directives, not documentation)', () => {
     const { stdout, status } = runCli(['lint', FIXTURE, '--format', 'json']);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout);
-    expect(parsed.ruleCount).toBeGreaterThan(3);
-    expect(parsed.ruleCount).toBeLessThan(100);
+    // The fixture has ~6 actual conventions/directives, not 19 documentation items
+    expect(parsed.ruleCount).toBeGreaterThan(1);
+    expect(parsed.ruleCount).toBeLessThan(20);
   });
 
   it('produces a non-zero token count', () => {
     const { stdout, status } = runCli(['lint', FIXTURE, '--format', 'json']);
     expect(status).toBe(0);
     const parsed = JSON.parse(stdout);
+    // Token count is for the FULL file, not just extracted rules
     expect(parsed.tokenAnalysis.tokenCount).toBeGreaterThan(0);
   });
 

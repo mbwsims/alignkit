@@ -4,17 +4,17 @@ const PATTERNS: Array<{ category: RuleCategory; pattern: RegExp }> = [
   {
     category: 'tool-constraint',
     pattern:
-      /\b(pnpm|npm|yarn|bun|git|docker|pytest|jest|vitest|eslint|prettier|webpack|vite|turbo|nx)\b/i,
+      /\b(pnpm|npm|yarn|bun|npx|pip|brew|apt|cargo|go |make|git|docker|pytest|jest|vitest|mocha|eslint|prettier|biome|webpack|vite|turbo|nx|prisma|next|tsc|node)\b/i,
   },
   {
     category: 'code-structure',
     pattern:
-      /\b(exports?|imports?|types?|interfaces?|class|async|strict|module|function|const|let|var|enum|namespace|generic|abstraction)\b/i,
+      /\b(named exports?|default exports?|imports?|types?|interfaces?|class(?:es)?|async|await|strict mode|module|function|const|let|var|enum|namespace|generics?|abstraction|CommonJS|ESM|arrow function|spread operator)\b/i,
   },
   {
     category: 'process-ordering',
     pattern:
-      /\b(before|after|first|then|prior to)\b.*\b(run|test|build|commit|deploy|lint|check|install|format)\b|\b(run|test|build|commit|deploy|lint|check|install|format)\b.*\b(before|after|first|then|prior to)\b/i,
+      /\b(before|after|first|then|prior to)\b.*\b(run|test|build|commit|deploy|lint|check|install|format|push|merge)\b|\b(run|test|build|commit|deploy|lint|check|install|format|push|merge)\b.*\b(before|after|first|then|prior to)\b/i,
   },
   {
     category: 'meta',
@@ -24,12 +24,12 @@ const PATTERNS: Array<{ category: RuleCategory; pattern: RegExp }> = [
   {
     category: 'style-guidance',
     pattern:
-      /\b(clean|readable|meaningful|good|proper|careful|consistent|clear|simple|concise|descriptive|idiomatic|elegant|maintainable|well-named|well-structured)\b/i,
+      /\b(clean|readable|meaningful|good|proper|careful|consistent|clear|simple|concise|descriptive|idiomatic|elegant|maintainable|well-named|well-structured|focused|small)\b/i,
   },
   {
     category: 'behavioral',
     pattern:
-      /\b(think|consider|ask|explain|step by step|reason|reflect|analyze|decide|evaluate|assess|plan|approach|handle|address)\b/i,
+      /\b(think|consider|ask|explain|step by step|reason|reflect)\b/i,
   },
 ];
 
