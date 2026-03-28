@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { discoverInstructionFiles, parseInstructionFile } from '../../src/parsers/auto-detect.js';
 
 function makeTmpDir(): string {
-  const dir = join(tmpdir(), `agentlint-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const dir = join(tmpdir(), `alignkit-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }

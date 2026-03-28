@@ -177,7 +177,7 @@ export function computeReport(
 
 export function formatTerminalReport(data: ReportData): string {
   if (data.totalSessions === 0) {
-    return 'No history found within the reporting window. Run `agentlint check` first.';
+    return 'No history found within the reporting window. Run `alignkit check` first.';
   }
 
   const lines: string[] = [];
@@ -317,7 +317,7 @@ export function formatHtmlReport(data: ReportData): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>agentlint Adherence Report</title>
+<title>alignkit Adherence Report</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #333; }
   h1 { border-bottom: 2px solid #eee; padding-bottom: .5rem; }
@@ -336,7 +336,7 @@ export function formatHtmlReport(data: ReportData): string {
 </style>
 </head>
 <body>
-<h1>agentlint Adherence Report</h1>
+<h1>alignkit Adherence Report</h1>
 <p class="summary">Last ${data.days} days &mdash; ${data.totalSessions} sessions<br>
 Overall: ${data.overallFirst}% &rarr; ${data.overallSecond}% (${diffStr})</p>
 <table>
@@ -396,8 +396,8 @@ export function registerReportCommand(program: Command): void {
       const rules = parseInstructionFile(content, filePath);
 
       // 3. Load history
-      const agentlintDir = path.join(cwd, '.agentlint');
-      const store = new HistoryStore(agentlintDir);
+      const alignkitDir = path.join(cwd, '.alignkit');
+      const store = new HistoryStore(alignkitDir);
       const rulesVersion = HistoryStore.computeRulesVersion(filePath);
       const sessions = store.queryByEpoch(rulesVersion);
 
@@ -405,7 +405,7 @@ export function registerReportCommand(program: Command): void {
       const data = computeReport(rules, sessions, days);
 
       if (data.totalSessions === 0) {
-        console.log('No history found within the reporting window. Run `agentlint check` first.');
+        console.log('No history found within the reporting window. Run `alignkit check` first.');
         return;
       }
 
@@ -418,10 +418,10 @@ export function registerReportCommand(program: Command): void {
           console.log(formatMarkdownReport(data));
           break;
         case 'html': {
-          if (!existsSync(agentlintDir)) {
-            mkdirSync(agentlintDir, { recursive: true });
+          if (!existsSync(alignkitDir)) {
+            mkdirSync(alignkitDir, { recursive: true });
           }
-          const htmlPath = path.join(agentlintDir, 'report.html');
+          const htmlPath = path.join(alignkitDir, 'report.html');
           writeFileSync(htmlPath, formatHtmlReport(data), 'utf-8');
           console.log(`HTML report written to ${htmlPath}`);
           break;

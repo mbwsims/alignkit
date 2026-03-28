@@ -101,8 +101,8 @@ describe('computeStatus', () => {
   it('returns no-history message when sessions are empty', () => {
     const output = computeStatus('CLAUDE.md', []);
     expect(output).toContain('No history found');
-    expect(output).toContain('agentlint watch');
-    expect(output).toContain('agentlint check');
+    expect(output).toContain('alignkit watch');
+    expect(output).toContain('alignkit check');
   });
 
   it('computes status output with mock history data', () => {

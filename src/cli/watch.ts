@@ -122,14 +122,14 @@ export function registerWatchCommand(program: Command): void {
       let rulesVersion = HistoryStore.computeRulesVersion(filePath);
       let fileHash = hashFile(filePath);
 
-      // 3. Resolve agentlint directory
-      const agentlintDir = path.join(cwd, '.agentlint');
-      if (!existsSync(agentlintDir)) {
-        mkdirSync(agentlintDir, { recursive: true });
+      // 3. Resolve alignkit directory
+      const alignkitDir = path.join(cwd, '.alignkit');
+      if (!existsSync(alignkitDir)) {
+        mkdirSync(alignkitDir, { recursive: true });
       }
 
-      const pidPath = path.join(agentlintDir, 'watch.pid');
-      const cursorPath = path.join(agentlintDir, 'watch.cursor');
+      const pidPath = path.join(alignkitDir, 'watch.pid');
+      const cursorPath = path.join(alignkitDir, 'watch.cursor');
 
       // 4. PID file — refuse if another watch is running
       if (!acquirePidFile(pidPath)) {
@@ -155,7 +155,7 @@ export function registerWatchCommand(program: Command): void {
       }
 
       // 7. Polling loop
-      const store = new HistoryStore(agentlintDir);
+      const store = new HistoryStore(alignkitDir);
 
       const poll = (): void => {
         try {

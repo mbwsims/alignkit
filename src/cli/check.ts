@@ -292,8 +292,8 @@ export function registerCheckCommand(program: Command): void {
       const sessions = readSessions({ cwd, since: sinceDate });
 
       // 6. Load history store
-      const agentlintDir = path.join(cwd, '.agentlint');
-      const store = new HistoryStore(agentlintDir);
+      const alignkitDir = path.join(cwd, '.alignkit');
+      const store = new HistoryStore(alignkitDir);
 
       // 7. Process sessions
       let processedCount = 0;

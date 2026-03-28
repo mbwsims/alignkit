@@ -101,8 +101,8 @@ export function registerOptimizeCommand(program: Command): void {
       const originalRules = parseInstructionFile(content, filePath);
 
       // 3. Load history and compute maps
-      const agentlintDir = path.join(cwd, '.agentlint');
-      const store = new HistoryStore(agentlintDir);
+      const alignkitDir = path.join(cwd, '.alignkit');
+      const store = new HistoryStore(alignkitDir);
       const rulesVersion = HistoryStore.computeRulesVersion(filePath);
       const sessions = store.queryByEpoch(rulesVersion);
       const { adherenceMap, relevanceMap } = computeMaps(originalRules, sessions);
@@ -126,13 +126,13 @@ export function registerOptimizeCommand(program: Command): void {
       }
 
       // 5. Write output files
-      if (!existsSync(agentlintDir)) {
-        mkdirSync(agentlintDir, { recursive: true });
+      if (!existsSync(alignkitDir)) {
+        mkdirSync(alignkitDir, { recursive: true });
       }
 
       const outputFileName = path.basename(filePath).replace(/\.md$/, '.optimized.md');
       const outputPath = path.join(cwd, outputFileName);
-      const diffPath = path.join(cwd, 'agentlint-diff.md');
+      const diffPath = path.join(cwd, 'alignkit-diff.md');
 
       writeFileSync(outputPath, reconstructMarkdown(finalRules), 'utf-8');
       writeDiff(originalRules, finalRules, deduped, flagged, diffPath);
@@ -177,7 +177,7 @@ export function registerOptimizeCommand(program: Command): void {
         console.log(`  Before: ${originalRules.length} rules, ~${beforeTokens} tokens`);
         console.log(`  After:  ${finalRules.length} rules, ~${afterTokens} tokens`);
         console.log(`  Output: ${outputFileName}`);
-        console.log(`  Review: agentlint-diff.md`);
+        console.log(`  Review: alignkit-diff.md`);
       }
     });
 }

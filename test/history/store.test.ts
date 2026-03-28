@@ -30,7 +30,7 @@ describe('HistoryStore', () => {
   let store: HistoryStore;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'agentlint-store-test-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'alignkit-store-test-'));
     store = new HistoryStore(tmpDir);
   });
 
@@ -166,8 +166,8 @@ describe('HistoryStore', () => {
       expect(existsSync(join(tmpDir, 'history.lock'))).toBe(false);
     });
 
-    it('creates .agentlint directory if it does not exist', () => {
-      const nestedDir = join(tmpDir, 'sub', '.agentlint');
+    it('creates .alignkit directory if it does not exist', () => {
+      const nestedDir = join(tmpDir, 'sub', '.alignkit');
       const nestedStore = new HistoryStore(nestedDir);
       nestedStore.append(makeResult('sess-nested'));
 

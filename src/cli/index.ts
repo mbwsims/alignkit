@@ -10,8 +10,8 @@ import { registerOptimizeCommand } from './optimize.js';
 const program = new Command();
 
 program
-  .name('agentlint')
-  .description('Measure, debug, and optimize AI coding agent instruction files')
+  .name('alignkit')
+  .description('Instruction intelligence for coding agents')
   .version('0.1.0');
 
 registerLintCommand(program);

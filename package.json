@@ -1,10 +1,10 @@
 {
-  "name": "agentlint",
+  "name": "alignkit",
   "version": "0.1.0",
-  "description": "Measure, debug, and optimize AI coding agent instruction files",
+  "description": "Instruction intelligence for coding agents",
   "type": "module",
   "bin": {
-    "agentlint": "./dist/cli/index.js"
+    "alignkit": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc",

@@ -66,7 +66,7 @@ export function computeStatus(
   sessions: SessionResult[],
 ): string {
   if (sessions.length === 0) {
-    return 'No history found. Run `agentlint watch` or `agentlint check` first.';
+    return 'No history found. Run `alignkit watch` or `alignkit check` first.';
   }
 
   // Overall adherence
@@ -152,8 +152,8 @@ export function registerStatusCommand(program: Command): void {
       }
 
       // 2. Load history store
-      const agentlintDir = path.join(cwd, '.agentlint');
-      const store = new HistoryStore(agentlintDir);
+      const alignkitDir = path.join(cwd, '.alignkit');
+      const store = new HistoryStore(alignkitDir);
 
       // 3. Get current epoch sessions
       const rulesVersion = HistoryStore.computeRulesVersion(filePath);

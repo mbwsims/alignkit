@@ -46,7 +46,7 @@ describe('lint command integration', () => {
     expect(parsed.ruleCount).toBeGreaterThan(0);
   });
 
-  it('--format markdown output contains # agentlint report heading or file heading', () => {
+  it('--format markdown output contains # alignkit report heading or file heading', () => {
     const { stdout, status } = runCli(['lint', SIMPLE_MD, '--format', 'markdown']);
     expect(status).toBe(0);
     // Markdown reporter starts with "# <filename>"
@@ -54,13 +54,13 @@ describe('lint command integration', () => {
   });
 
   it('exits with non-zero code when no instruction files found in empty temp dir', () => {
-    const tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-test-'));
+    const tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-test-'));
     const { status } = runCli(['lint'], tmpDir);
     expect(status).not.toBe(0);
   });
 
   it('--all flag analyzes both files and output contains results for each', () => {
-    const tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-test-'));
+    const tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-test-'));
 
     writeFileSync(
       path.join(tmpDir, 'CLAUDE.md'),

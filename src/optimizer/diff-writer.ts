@@ -15,7 +15,7 @@ export function writeDiff(
 ): void {
   const lines: string[] = [];
 
-  lines.push('# agentlint optimization diff');
+  lines.push('# alignkit optimization diff');
   lines.push('');
   lines.push(`Original: ${original.length} rules`);
   lines.push(`Optimized: ${optimized.length} rules`);

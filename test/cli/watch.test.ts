@@ -21,7 +21,7 @@ describe('watch command utilities', () => {
 
   describe('PID file management', () => {
     it('creates a PID file with current process ID', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const pidPath = path.join(tmpDir, 'watch.pid');
 
       const acquired = acquirePidFile(pidPath);
@@ -33,7 +33,7 @@ describe('watch command utilities', () => {
     });
 
     it('refuses to start if PID file exists and process is alive', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const pidPath = path.join(tmpDir, 'watch.pid');
 
       // Write current PID (which is alive)
@@ -44,7 +44,7 @@ describe('watch command utilities', () => {
     });
 
     it('replaces stale PID file (dead process)', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const pidPath = path.join(tmpDir, 'watch.pid');
 
       // Write a PID that is very unlikely to be alive
@@ -58,7 +58,7 @@ describe('watch command utilities', () => {
     });
 
     it('cleans up PID file on exit', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const pidPath = path.join(tmpDir, 'watch.pid');
 
       writeFileSync(pidPath, String(process.pid), 'utf-8');
@@ -67,7 +67,7 @@ describe('watch command utilities', () => {
     });
 
     it('does not clean up PID file owned by another process', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const pidPath = path.join(tmpDir, 'watch.pid');
 
       writeFileSync(pidPath, '12345', 'utf-8');
@@ -89,14 +89,14 @@ describe('watch command utilities', () => {
 
   describe('cursor management', () => {
     it('returns null when cursor file does not exist', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const cursorPath = path.join(tmpDir, 'watch.cursor');
 
       expect(readCursor(cursorPath)).toBeNull();
     });
 
     it('returns null for empty cursor file', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const cursorPath = path.join(tmpDir, 'watch.cursor');
       writeFileSync(cursorPath, '', 'utf-8');
 
@@ -104,7 +104,7 @@ describe('watch command utilities', () => {
     });
 
     it('reads and writes cursor value', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const cursorPath = path.join(tmpDir, 'watch.cursor');
 
       const ts = '2025-01-15T10:30:00.000Z';
@@ -114,7 +114,7 @@ describe('watch command utilities', () => {
     });
 
     it('overwrites existing cursor value', () => {
-      tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-watch-test-'));
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-watch-test-'));
       const cursorPath = path.join(tmpDir, 'watch.cursor');
 
       writeCursor(cursorPath, '2025-01-15T10:00:00.000Z');

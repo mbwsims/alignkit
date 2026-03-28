@@ -25,7 +25,7 @@ function runCli(args: string[], cwd?: string): { stdout: string; status: number 
 }
 
 function createTestProject(): string {
-  const tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-check-test-'));
+  const tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-check-test-'));
 
   // Create instruction file
   writeFileSync(
@@ -82,7 +82,7 @@ describe('check command', () => {
   });
 
   it('exits with error when no instruction files found', () => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'agentlint-check-empty-'));
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-check-empty-'));
     const { stdout, status } = runCli(['check'], tmpDir);
     expect(status).not.toBe(0);
     expect(stdout.toLowerCase()).toContain('no instruction files');
@@ -146,13 +146,13 @@ describe('check command', () => {
     expect(status).toBe(0);
   });
 
-  it('creates .agentlint directory on first run', () => {
+  it('creates .alignkit directory on first run', () => {
     tmpDir = createTestProject();
-    const agentlintDir = path.join(tmpDir, '.agentlint');
+    const alignkitDir = path.join(tmpDir, '.alignkit');
 
-    expect(existsSync(agentlintDir)).toBe(false);
+    expect(existsSync(alignkitDir)).toBe(false);
     runCli(['check'], tmpDir);
-    // .agentlint is only created when there are sessions to store.
+    // .alignkit is only created when there are sessions to store.
     // With no sessions, the directory may not be created.
     // This is acceptable — the store only writes when there's data.
   });

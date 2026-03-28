@@ -50,7 +50,7 @@ describe('readSessions', () => {
   const encoded = '-Users-msims-Documents-GitHub-test-project';
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'agentlint-session-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'alignkit-session-'));
   });
 
   afterEach(() => {

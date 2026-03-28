@@ -83,7 +83,7 @@ A session file contains multiple line types. **Not all lines are `{ type, messag
 | `system` | ~16 | ✗ (system events) |
 | `last-prompt` | ~3 | ✗ (session resume) |
 
-**For agentlint, we only need `assistant` lines** — specifically the `tool_use` blocks within `message.content`.
+**For alignkit, we only need `assistant` lines** — specifically the `tool_use` blocks within `message.content`.
 
 ### Common fields (on most line types):
 
@@ -195,7 +195,7 @@ Subagent sessions are stored separately in `subagents/` directory:
 - `agent-{agentId}.jsonl` — same format as main session
 - `agent-{agentId}.meta.json` — `{ "agentType": "general-purpose", "description": "..." }`
 
-**For agentlint v1:** We should read subagent files too, since agents delegate work there. A rule like "use pnpm" might be followed in a subagent session, not the main session.
+**For alignkit v1:** We should read subagent files too, since agents delegate work there. A rule like "use pnpm" might be followed in a subagent session, not the main session.
 
 ## What Was Wrong in the Original Spec
 

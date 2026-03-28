@@ -25,7 +25,7 @@ describe('resolveProjectDir', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'agentlint-test-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'alignkit-test-'));
   });
 
   afterEach(() => {
