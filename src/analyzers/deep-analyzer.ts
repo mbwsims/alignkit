@@ -23,15 +23,16 @@ function buildPrompt(
   context: ReturnType<typeof collectProjectContext>,
   vagueRules: Rule[],
 ): string {
-  return `You are analyzing an AI coding agent's instruction file for effectiveness.
-Return your analysis as JSON matching this exact schema.
+  return `You are an expert at analyzing AI coding agent instruction files (CLAUDE.md, .cursorrules, etc.) for effectiveness. Your job is to help developers write better instructions that agents will actually follow.
+
+Analyze these rules against the project context and return JSON.
 
 RULES (each with an ID for reference):
 ${rules.map((r) => `[${r.id.slice(0, 8)}] ${r.text}`).join('\n')}
 
-PROJECT CONTEXT:
-Dependencies: ${context.dependencies.join(', ')}
-TypeScript config: ${JSON.stringify(context.tsconfig)}
+PROJECT CONTEXT (from the project where this instruction file lives):
+Dependencies: ${context.dependencies.length > 0 ? context.dependencies.join(', ') : '(none found)'}
+TypeScript config: ${context.tsconfig ? JSON.stringify(context.tsconfig) : '(not found)'}
 Directory structure:
 ${formatDirectoryTree(context.directoryTree)}
 
@@ -41,22 +42,22 @@ ${vagueRules.length > 0 ? vagueRules.map((r) => `[${r.id.slice(0, 8)}] ${r.text}
 Return a JSON object with exactly these fields:
 {
   "effectiveness": [
-    { "ruleId": "<first 8 chars of rule ID>", "level": "HIGH|MEDIUM|LOW", "reason": "<why>", "suggestedRewrite": "<optional, for LOW rules>" }
+    { "ruleId": "<first 8 chars of rule ID>", "level": "HIGH|MEDIUM|LOW", "reason": "<1-2 sentence explanation>", "suggestedRewrite": "<concrete rewrite for LOW/vague rules, omit for HIGH>" }
   ],
   "coverageGaps": [
-    { "area": "<area name>", "description": "<what's missing>", "evidence": "<where you found it>" }
+    { "area": "<short area name, 2-4 words>", "description": "<what behavior is missing and why it matters>", "evidence": "<specific files, dependencies, or patterns that suggest this gap>" }
   ],
   "consolidation": [
-    { "ruleIds": ["<id1>", "<id2>"], "mergedText": "<merged rule>", "tokenSavings": <number> }
+    { "ruleIds": ["<id1>", "<id2>"], "mergedText": "<COMPLETE merged rule text, not truncated>", "tokenSavings": <estimated tokens saved as integer> }
   ]
 }
 
 Guidelines:
-- effectiveness: assess EVERY rule. HIGH = likely followed. MEDIUM = may be followed inconsistently. LOW = unlikely to be followed (too vague, too abstract, conflicts with common patterns).
-- coverageGaps: identify 2-5 important behaviors NOT covered by the rules, based on the project's tech stack and structure.
-- consolidation: find groups of 2-5 related rules that could be merged into fewer, stronger rules. Estimate token savings.
-- For LOW effectiveness rules, always provide a suggestedRewrite that is concrete and actionable.
-- For vague rules listed above, provide suggestedRewrite informed by the project context.`;
+- effectiveness: Assess EVERY rule. Use the project context to judge — a rule referencing a tool not in dependencies is LOW. A rule that's concrete and matches the project structure is HIGH. A vague or abstract rule is MEDIUM or LOW.
+- suggestedRewrite: For LOW and vague rules, write a concrete, actionable rewrite that references actual project patterns (real directory names, real dependency names). The rewrite should be something an agent can unambiguously follow.
+- coverageGaps: Identify 3-5 important behaviors NOT covered, based on the project's actual tech stack and structure. Be specific — reference real directories and dependencies you can see. Don't suggest gaps for technologies not present.
+- consolidation: Find groups of related rules that can merge into fewer, stronger rules. The mergedText MUST be the complete merged rule — do NOT truncate it. Each merge should preserve all the original constraints.
+- Keep reasons concise (1-2 sentences). No filler.`;
 }
 
 function extractJSON(text: string): unknown {

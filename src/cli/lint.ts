@@ -97,9 +97,12 @@ export function registerLintCommand(program: Command): void {
 
         results.push(result);
 
-        // Deep analysis if requested
+        // Deep analysis if requested — use the instruction file's directory
+        // as project context, not CWD (they may differ when linting a file
+        // in another directory)
         if (options.deep) {
-          const deepResult = await analyzeDeep(rules, cwd);
+          const projectDir = path.dirname(filePath);
+          const deepResult = await analyzeDeep(rules, projectDir);
           if (deepResult !== undefined) {
             rules = deepResult.rules;
             result.rules = deepResult.rules;

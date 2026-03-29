@@ -6,7 +6,10 @@ import type { Rule } from '../parsers/types.js';
 const TRUNCATE_LEN = 60;
 
 function truncate(text: string, len = TRUNCATE_LEN): string {
-  return text.length > len ? text.slice(0, len - 1) + '…' : text;
+  if (text.length <= len) return text;
+  // Truncate at the last space before the limit to avoid cutting mid-word
+  const cut = text.lastIndexOf(' ', len - 2);
+  return (cut > len * 0.4 ? text.slice(0, cut) : text.slice(0, len - 1)) + '…';
 }
 
 function formatNumber(n: number): string {
@@ -37,13 +40,18 @@ export class TerminalReporter implements Reporter {
     );
     lines.push('');
 
-    // Diagnostics section
-    const allDiagnostics = result.rules.flatMap((rule) =>
-      rule.diagnostics.map((d) => ({ rule, d }))
+    // Diagnostics section — only show STATIC diagnostics inline
+    // Deep analysis results (EFFECTIVENESS, REWRITE, COVERAGE_GAP, CONSOLIDATION)
+    // are shown in their own sections below
+    const DEEP_CODES = new Set(['EFFECTIVENESS', 'REWRITE', 'COVERAGE_GAP', 'CONSOLIDATION']);
+    const staticDiagnostics = result.rules.flatMap((rule) =>
+      rule.diagnostics
+        .filter((d) => !DEEP_CODES.has(d.code))
+        .map((d) => ({ rule, d }))
     );
 
-    if (allDiagnostics.length > 0) {
-      for (const { rule, d } of allDiagnostics) {
+    if (staticDiagnostics.length > 0) {
+      for (const { rule, d } of staticDiagnostics) {
         const icon =
           d.severity === 'error'
             ? pc.red('✗')
