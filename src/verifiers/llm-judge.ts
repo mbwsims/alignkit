@@ -68,7 +68,7 @@ ${writtenBlock}
 Files edited:
 ${editedBlock}
 
-For each rule, respond with JSON array:
+Respond ONLY with a JSON array — no prose, no explanation, no markdown. Just the array:
 [
   { "ruleId": "<8-char id prefix>", "relevant": true/false, "followed": true/false/null, "evidence": "<1-2 sentences citing specific actions>" }
 ]
@@ -78,14 +78,23 @@ Guidelines:
 - followed=null if relevant but evidence is inconclusive
 - followed=true/false only when you have clear evidence from the actions
 - Be specific: cite exact commands or file paths as evidence
-- When in doubt, use followed=null rather than guessing`;
+- When in doubt, use followed=null rather than guessing
+- Output ONLY the JSON array. No other text.`;
 }
 
 function parseResponse(text: string, rules: Rule[]): LLMJudgment[] {
-  // Strip markdown code blocks if present
   let cleaned = text.trim();
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+
+  // Strategy 1: extract from markdown code block
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) {
+    cleaned = codeBlockMatch[1].trim();
+  } else {
+    // Strategy 2: find the first JSON array in the response (skip any prose before it)
+    const arrayMatch = cleaned.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      cleaned = arrayMatch[0];
+    }
   }
 
   const parsed = JSON.parse(cleaned);
