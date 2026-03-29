@@ -312,15 +312,17 @@ export function registerCheckCommand(program: Command): void {
 
         let observations = verifySession(rules, session.actions, session.sessionId);
 
-        // --deep: send unmapped rules to LLM for evaluation
+        // --deep: send rules that auto-verification couldn't resolve to LLM
+        // This includes: unmapped rules AND rules where auto-verification
+        // found no relevant evidence (relevant=false)
         if (options.deep) {
-          const unmappedRuleIds = new Set(
+          const needsLLMIds = new Set(
             observations
-              .filter((o) => !o.relevant && o.method === 'unmapped')
+              .filter((o) => o.method === 'unmapped' || !o.relevant)
               .map((o) => o.ruleId),
           );
 
-          const unmappedRules = rules.filter((r) => unmappedRuleIds.has(r.id));
+          const unmappedRules = rules.filter((r) => needsLLMIds.has(r.id));
 
           if (unmappedRules.length > 0) {
             if (process.env.ANTHROPIC_API_KEY) {
