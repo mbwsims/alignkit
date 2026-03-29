@@ -6,6 +6,7 @@ import type { Command } from 'commander';
 import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
+import { verifyWithLLM } from '../verifiers/llm-judge.js';
 import { HistoryStore } from '../history/store.js';
 import type { Observation } from '../verifiers/types.js';
 import type { SerializedObservation, SessionResult } from '../history/types.js';
@@ -257,8 +258,9 @@ export function registerCheckCommand(program: Command): void {
     .command('check [file]')
     .description('Check rule adherence against Claude Code session history')
     .option('--fresh', 'Re-parse all sessions (ignore history cache)')
+    .option('--deep', 'Use LLM to evaluate rules that auto-mapping cannot verify (requires ANTHROPIC_API_KEY)')
     .option('--format <format>', 'Output format: terminal, json, markdown', 'terminal')
-    .action(async (file: string | undefined, options: { fresh?: boolean; format: string }) => {
+    .action(async (file: string | undefined, options: { fresh?: boolean; deep?: boolean; format: string }) => {
       const cwd = process.cwd();
 
       // 1. Auto-discover instruction file
@@ -308,7 +310,39 @@ export function registerCheckCommand(program: Command): void {
           store.removeSession(session.sessionId);
         }
 
-        const observations = verifySession(rules, session.actions, session.sessionId);
+        let observations = verifySession(rules, session.actions, session.sessionId);
+
+        // --deep: send unmapped rules to LLM for evaluation
+        if (options.deep) {
+          const unmappedRuleIds = new Set(
+            observations
+              .filter((o) => !o.relevant && o.method === 'unmapped')
+              .map((o) => o.ruleId),
+          );
+
+          const unmappedRules = rules.filter((r) => unmappedRuleIds.has(r.id));
+
+          if (unmappedRules.length > 0) {
+            if (process.env.ANTHROPIC_API_KEY) {
+              const llmObservations = await verifyWithLLM(
+                unmappedRules,
+                session.actions,
+                session.sessionId,
+              );
+
+              if (llmObservations.length > 0) {
+                const llmRuleIds = new Set(llmObservations.map((o) => o.ruleId));
+                observations = [
+                  ...observations.filter((o) => !llmRuleIds.has(o.ruleId)),
+                  ...llmObservations,
+                ];
+              }
+            } else {
+              process.stderr.write('ANTHROPIC_API_KEY not set. Skipping LLM evaluation.\n');
+            }
+          }
+        }
+
         const result: SessionResult = {
           sessionId: session.sessionId,
           timestamp: session.timestamp,
