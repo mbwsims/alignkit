@@ -159,9 +159,11 @@ export function computeReport(
 
   const neverRelevant = trends.filter((t) => t.totalRelevant === 0);
   if (neverRelevant.length > 0) {
+    const count = neverRelevant.length;
+    const verb = count === 1 ? 'has' : 'have';
     recommendations.push({
-      ruleText: `${neverRelevant.length} rule${neverRelevant.length === 1 ? '' : 's'}`,
-      reason: `have never been relevant in any session. May be too specific or irrelevant to current work.`,
+      ruleText: `${count} rule${count === 1 ? '' : 's'}`,
+      reason: `${verb} never been relevant in any session. May be too specific or irrelevant to current work.`,
     });
   }
 
@@ -181,16 +183,25 @@ export function formatTerminalReport(data: ReportData): string {
   }
 
   const lines: string[] = [];
-  const diff = data.overallSecond - data.overallFirst;
-  const diffStr = diff >= 0 ? `+${diff}%` : `${diff}%`;
 
   lines.push(
     pc.bold(
-      `ADHERENCE REPORT \u2014 last ${data.days} days (${data.totalSessions} sessions)`,
+      `ADHERENCE REPORT \u2014 last ${data.days} days (${data.totalSessions} session${data.totalSessions === 1 ? '' : 's'})`,
     ),
   );
   lines.push('');
-  lines.push(`Overall: ${data.overallFirst}% \u2192 ${data.overallSecond}% (${diffStr})`);
+
+  // Only show trend line when we have enough data to split meaningfully
+  if (data.totalSessions >= 2) {
+    const diff = data.overallSecond - data.overallFirst;
+    const diffStr = diff >= 0 ? `+${diff}%` : `${diff}%`;
+    lines.push(`Overall: ${data.overallFirst}% \u2192 ${data.overallSecond}% (${diffStr})`);
+  } else {
+    // Single session — show overall only, no trend
+    const overall = data.overallFirst || data.overallSecond;
+    lines.push(`Overall: ${overall}%`);
+    lines.push(pc.dim('(Not enough sessions for trend analysis — need at least 2)'));
+  }
   lines.push('');
 
   const improved = data.trends.filter((t) => t.category === 'IMPROVED');
@@ -247,7 +258,10 @@ export function formatTerminalReport(data: ReportData): string {
   if (data.recommendations.length > 0) {
     lines.push(pc.yellow('RECOMMENDATIONS:'));
     for (const rec of data.recommendations) {
-      lines.push(`  \u2022 "${rec.ruleText}" ${rec.reason}`);
+      // Don't quote numeric summaries like "5 rules"
+      const isCount = /^\d+ rules?$/.test(rec.ruleText);
+      const display = isCount ? rec.ruleText : `"${rec.ruleText}"`;
+      lines.push(`  \u2022 ${display} ${rec.reason}`);
     }
     lines.push('');
   }

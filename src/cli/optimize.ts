@@ -138,7 +138,9 @@ export function registerOptimizeCommand(program: Command): void {
       writeDiff(originalRules, finalRules, deduped, flagged, diffPath);
 
       // 6. Output summary
-      const beforeTokens = estimateTokens(content);
+      // Compare tokens of rules only (not the full file with documentation)
+      const beforeContent = reconstructMarkdown(originalRules);
+      const beforeTokens = estimateTokens(beforeContent);
       const afterContent = reconstructMarkdown(finalRules);
       const afterTokens = estimateTokens(afterContent);
       const tokenSaved = deduped.reduce((sum, d) => sum + estimateTokens(d.removed.text), 0);
