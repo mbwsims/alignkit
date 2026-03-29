@@ -258,7 +258,8 @@ export function registerCheckCommand(program: Command): void {
     .command('check [file]')
     .description('Check rule adherence against Claude Code session history')
     .option('--fresh', 'Re-parse all sessions (ignore history cache)')
-    .option('--deep', 'Use LLM to evaluate rules that auto-mapping cannot verify (requires ANTHROPIC_API_KEY)')
+    .option('--deep', 'Use LLM to evaluate unverifiable rules (~$0.05/session, requires ANTHROPIC_API_KEY)')
+    .option('--no-deep', 'Skip LLM evaluation even if API key is available')
     .option('--format <format>', 'Output format: terminal, json, markdown', 'terminal')
     .action(async (file: string | undefined, options: { fresh?: boolean; deep?: boolean; format: string }) => {
       const cwd = process.cwd();
@@ -299,6 +300,8 @@ export function registerCheckCommand(program: Command): void {
 
       // 7. Process sessions
       let processedCount = 0;
+      let totalUnresolved = 0;
+      let totalAutoVerified = 0;
 
       for (const session of sessions) {
         if (!options.fresh && store.hasSession(session.sessionId)) {
@@ -312,37 +315,41 @@ export function registerCheckCommand(program: Command): void {
 
         let observations = verifySession(rules, session.actions, session.sessionId);
 
-        // --deep: send rules that auto-verification couldn't resolve to LLM
-        // This includes: unmapped rules AND rules where auto-verification
-        // found no relevant evidence (relevant=false)
-        if (options.deep) {
-          const needsLLMIds = new Set(
-            observations
-              .filter((o) => o.method === 'unmapped' || !o.relevant)
-              .map((o) => o.ruleId),
-          );
+        // Identify rules that auto-verification couldn't resolve
+        const needsLLMIds = new Set(
+          observations
+            .filter((o) => o.method === 'unmapped' || !o.relevant)
+            .map((o) => o.ruleId),
+        );
+        const unresolvedRules = rules.filter((r) => needsLLMIds.has(r.id));
 
-          const unmappedRules = rules.filter((r) => needsLLMIds.has(r.id));
+        // LLM evaluation: run if --deep was explicitly passed
+        if (options.deep && unresolvedRules.length > 0) {
+          if (process.env.ANTHROPIC_API_KEY) {
+            const llmObservations = await verifyWithLLM(
+              unresolvedRules,
+              session.actions,
+              session.sessionId,
+            );
 
-          if (unmappedRules.length > 0) {
-            if (process.env.ANTHROPIC_API_KEY) {
-              const llmObservations = await verifyWithLLM(
-                unmappedRules,
-                session.actions,
-                session.sessionId,
-              );
-
-              if (llmObservations.length > 0) {
-                const llmRuleIds = new Set(llmObservations.map((o) => o.ruleId));
-                observations = [
-                  ...observations.filter((o) => !llmRuleIds.has(o.ruleId)),
-                  ...llmObservations,
-                ];
-              }
-            } else {
-              process.stderr.write('ANTHROPIC_API_KEY not set. Skipping LLM evaluation.\n');
+            if (llmObservations.length > 0) {
+              const llmRuleIds = new Set(llmObservations.map((o) => o.ruleId));
+              observations = [
+                ...observations.filter((o) => !llmRuleIds.has(o.ruleId)),
+                ...llmObservations,
+              ];
             }
+          } else {
+            process.stderr.write(
+              pc.yellow('Warning: --deep requires ANTHROPIC_API_KEY. Skipping LLM evaluation.\n'),
+            );
           }
+        }
+
+        // Track unresolved count for the nudge message after output
+        if (!options.deep && unresolvedRules.length > 0) {
+          totalUnresolved = unresolvedRules.length;
+          totalAutoVerified = rules.length - unresolvedRules.length;
         }
 
         const result: SessionResult = {
@@ -374,6 +381,22 @@ export function registerCheckCommand(program: Command): void {
         default:
           console.log(formatTerminalOutput(relPath, sinceDate, totalSessions, adherenceData));
           break;
+      }
+
+      // Nudge: if there are unresolved rules and --deep wasn't used, suggest it
+      if (!options.deep && totalUnresolved > 0 && options.format === 'terminal') {
+        console.log('');
+        if (process.env.ANTHROPIC_API_KEY) {
+          console.log(
+            pc.dim(`  Auto-verification covered ${totalAutoVerified}/${rules.length} rules. `) +
+            pc.cyan(`Run with --deep to verify the remaining ${totalUnresolved} with LLM analysis (~$0.05/session).`),
+          );
+        } else {
+          console.log(
+            pc.dim(`  Auto-verification covered ${totalAutoVerified}/${rules.length} rules. `) +
+            pc.cyan(`Set ANTHROPIC_API_KEY and run with --deep to verify the remaining ${totalUnresolved} (~$0.05/session).`),
+          );
+        }
       }
     });
 }
