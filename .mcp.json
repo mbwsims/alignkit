@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "alignkit": {
+      "command": "node",
+      "args": ["dist/mcp/server.js"],
+      "cwd": "/Users/msims/Documents/GitHub/agent-lint"
+    }
+  }
+}
