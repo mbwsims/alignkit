@@ -66,6 +66,41 @@ export function reconstructMarkdown(rules: Rule[]): string {
 }
 
 /**
+ * Reorder rules by category priority when no session data is available.
+ * Tool constraints and process ordering rules go first (most actionable),
+ * followed by code structure, then everything else.
+ */
+const CATEGORY_PRIORITY: Record<string, number> = {
+  'tool-constraint': 1,
+  'process-ordering': 2,
+  'code-structure': 3,
+  'meta': 4,
+  'style-guidance': 5,
+  'behavioral': 6,
+};
+
+function reorderByPriority(rules: Rule[]): Rule[] {
+  // Group by section, reorder within each section
+  const sections = new Map<string | null, Rule[]>();
+  for (const rule of rules) {
+    const section = rule.source.section;
+    if (!sections.has(section)) sections.set(section, []);
+    sections.get(section)!.push(rule);
+  }
+
+  const result: Rule[] = [];
+  for (const [, sectionRules] of sections) {
+    sectionRules.sort((a, b) => {
+      const pa = CATEGORY_PRIORITY[a.category] ?? 99;
+      const pb = CATEGORY_PRIORITY[b.category] ?? 99;
+      return pa - pb;
+    });
+    result.push(...sectionRules);
+  }
+  return result;
+}
+
+/**
  * Estimate token count (rough: ~4 chars per token).
  */
 function estimateTokens(text: string): number {
@@ -100,25 +135,32 @@ export function registerOptimizeCommand(program: Command): void {
       const content = readFileSync(filePath, 'utf-8');
       const originalRules = parseInstructionFile(content, filePath);
 
-      // 3. Load history and compute maps
+      // 3. Load history if available (optimize works with or without session data)
       const alignkitDir = path.join(cwd, '.alignkit');
       const store = new HistoryStore(alignkitDir);
       const rulesVersion = HistoryStore.computeRulesVersion(filePath);
       const sessions = store.queryByEpoch(rulesVersion);
+      const hasSessionData = sessions.length > 0;
       const { adherenceMap, relevanceMap } = computeMaps(originalRules, sessions);
 
-      // Step 1: Deduplicate
+      // Step 1: Deduplicate (always works — uses text similarity, not session data)
       const { rules: dedupedRules, deduped } = deduplicateRules(originalRules, adherenceMap);
 
       // Step 2: Reorder within sections
-      const reorderedRules = reorderRules(dedupedRules, adherenceMap);
+      // With session data: sort by adherence (highest first)
+      // Without session data: sort verifiable rules first, then by category priority
+      const reorderedRules = hasSessionData
+        ? reorderRules(dedupedRules, adherenceMap)
+        : reorderByPriority(dedupedRules);
 
-      // Step 3: Flag for review
-      const flagged = flagRules(reorderedRules, adherenceMap, relevanceMap);
+      // Step 3: Flag for review (only when we have session data to judge)
+      const flagged = hasSessionData
+        ? flagRules(reorderedRules, adherenceMap, relevanceMap)
+        : [];
 
       // Step 4: Optionally prune never-relevant rules
       let finalRules = reorderedRules;
-      if (options.prune) {
+      if (options.prune && hasSessionData) {
         const neverRelevantIds = new Set(
           flagged.filter((f) => f.reason === 'never-relevant').map((f) => f.rule.id),
         );
@@ -160,18 +202,27 @@ export function registerOptimizeCommand(program: Command): void {
           diff: diffPath,
         }, null, 2));
       } else {
+        if (!hasSessionData) {
+          console.log(pc.dim('No session history found — optimizing based on structural analysis only.'));
+          console.log(pc.dim('Run `alignkit check` first for adherence-based optimization.'));
+          console.log('');
+        }
+
+        let stepNum = 1;
         console.log(
-          `Step 1 \u2014 Deduplicate:      Merged ${deduped.length} near-duplicate rule pair${deduped.length === 1 ? '' : 's'} (saves ~${tokenSaved} tokens)`,
+          `Step ${stepNum++} \u2014 Deduplicate:      Merged ${deduped.length} near-duplicate rule pair${deduped.length === 1 ? '' : 's'} (saves ~${tokenSaved} tokens)`,
         );
         console.log(
-          `Step 2 \u2014 Reorder:          Moved top-performing rules to top of each section`,
+          `Step ${stepNum++} \u2014 Reorder:          ${hasSessionData ? 'Moved top-performing rules to top of each section' : 'Moved actionable rules (tool constraints, process ordering) to top of each section'}`,
         );
-        console.log(
-          `Step 3 \u2014 Flag for review:  ${flagged.length} rule${flagged.length === 1 ? '' : 's'} need${flagged.length === 1 ? 's' : ''} attention`,
-        );
-        if (options.prune) {
+        if (hasSessionData) {
           console.log(
-            `Step 4 \u2014 Prune:            Removed ${neverRelevantCount} never-relevant rule${neverRelevantCount === 1 ? '' : 's'}`,
+            `Step ${stepNum++} \u2014 Flag for review:  ${flagged.length} rule${flagged.length === 1 ? '' : 's'} need${flagged.length === 1 ? 's' : ''} attention`,
+          );
+        }
+        if (options.prune && hasSessionData) {
+          console.log(
+            `Step ${stepNum++} \u2014 Prune:            Removed ${neverRelevantCount} never-relevant rule${neverRelevantCount === 1 ? '' : 's'}`,
           );
         }
         console.log('');

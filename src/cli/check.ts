@@ -302,6 +302,7 @@ export function registerCheckCommand(program: Command): void {
       let processedCount = 0;
       let totalUnresolved = 0;
       let totalAutoVerified = 0;
+      let unresolvedRuleNames: string[] = [];
 
       for (const session of sessions) {
         if (!options.fresh && store.hasSession(session.sessionId)) {
@@ -346,10 +347,13 @@ export function registerCheckCommand(program: Command): void {
           }
         }
 
-        // Track unresolved count for the nudge message after output
+        // Track unresolved rules for the nudge message after output
         if (!options.deep && unresolvedRules.length > 0) {
           totalUnresolved = unresolvedRules.length;
           totalAutoVerified = rules.length - unresolvedRules.length;
+          unresolvedRuleNames = unresolvedRules.map((r) =>
+            r.text.length > 40 ? r.text.slice(0, 39) + '…' : r.text,
+          );
         }
 
         const result: SessionResult = {
@@ -386,15 +390,18 @@ export function registerCheckCommand(program: Command): void {
       // Nudge: if there are unresolved rules and --deep wasn't used, suggest it
       if (!options.deep && totalUnresolved > 0 && options.format === 'terminal') {
         console.log('');
+        // Show which rules couldn't be verified
+        const ruleList = unresolvedRuleNames.slice(0, 3).map((n) => `"${n}"`).join(', ');
+        const more = totalUnresolved > 3 ? ` + ${totalUnresolved - 3} more` : '';
+        console.log(pc.dim(`  ${totalUnresolved} unresolved: ${ruleList}${more}`));
+
         if (process.env.ANTHROPIC_API_KEY) {
           console.log(
-            pc.dim(`  Auto-verification covered ${totalAutoVerified}/${rules.length} rules. `) +
-            pc.cyan(`Run with --deep to verify the remaining ${totalUnresolved} with LLM analysis (~$0.05/session).`),
+            pc.cyan(`  Run with --deep to verify these with LLM analysis (~$0.05/session).`),
           );
         } else {
           console.log(
-            pc.dim(`  Auto-verification covered ${totalAutoVerified}/${rules.length} rules. `) +
-            pc.cyan(`Set ANTHROPIC_API_KEY and run with --deep to verify the remaining ${totalUnresolved} (~$0.05/session).`),
+            pc.cyan(`  Set ANTHROPIC_API_KEY and run with --deep to verify (~$0.05/session).`),
           );
         }
       }

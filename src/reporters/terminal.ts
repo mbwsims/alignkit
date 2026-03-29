@@ -94,6 +94,44 @@ export class TerminalReporter implements Reporter {
       `${pc.bold('TOKENS')}  ${result.tokenAnalysis.overBudget ? pc.red(tokenSummary) : tokenSummary}`
     );
 
+    // QUICK WINS — actionable next steps from static analysis
+    const quickWins: string[] = [];
+
+    // Redundant rules can be merged
+    const redundantPairs = Math.floor(redundant / 2); // each pair produces 2 diagnostics
+    if (redundantPairs > 0) {
+      const tokenSavings = result.rules
+        .flatMap((r) => r.diagnostics)
+        .filter((d) => d.code === 'REDUNDANT')
+        .length; // rough estimate: each redundant rule ~1 rule worth of tokens
+      quickWins.push(`Merge ${redundantPairs} redundant rule pair${redundantPairs > 1 ? 's' : ''} → run ${pc.cyan('alignkit optimize')}`);
+    }
+
+    // Ordering issues
+    const orderingIssues = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'ORDERING').length;
+    if (orderingIssues > 0) {
+      quickWins.push(`Move ${orderingIssues} high-priority rule${orderingIssues > 1 ? 's' : ''} to top of file → run ${pc.cyan('alignkit optimize')}`);
+    }
+
+    // Vague rules need rewriting
+    if (vague > 0) {
+      quickWins.push(`Rewrite ${vague} vague rule${vague > 1 ? 's' : ''} to be concrete → run ${pc.cyan('alignkit lint --deep')} for suggestions`);
+    }
+
+    // Stale version references
+    const stale = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'STALE').length;
+    if (stale > 0) {
+      quickWins.push(`Verify ${stale} version reference${stale > 1 ? 's' : ''} ${stale > 1 ? 'are' : 'is'} current`);
+    }
+
+    if (quickWins.length > 0) {
+      lines.push('');
+      lines.push(pc.bold('QUICK WINS'));
+      for (const win of quickWins.slice(0, 3)) {
+        lines.push(`  → ${win}`);
+      }
+    }
+
     // Deep analysis sections
     if (result.deepAnalysis) {
       // Build a lookup that matches by ID prefix (LLM returns 8-char prefixes)
