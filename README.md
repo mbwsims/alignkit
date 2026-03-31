@@ -174,8 +174,8 @@ npx alignkit check --format json
 
 ## Current strengths
 
-- **lint is solid.** Finds real issues on real files. Tested against files from 6 to 387 lines.
-- **lint --deep produces genuinely useful insights.** Coverage gap analysis correctly identifies missing rules based on your project's actual dependencies and directory structure. Consolidation suggestions produce real token savings with concrete merged text.
+- **lint works well across a broad range of instruction files.** Finds real issues on real files. Tested against files from 6 to 387 lines.
+- **lint --deep often produces genuinely useful insights.** Coverage gap analysis correctly identifies missing rules based on your project's actual dependencies and directory structure. Consolidation suggestions produce real token savings with concrete merged text.
 - **check --deep dramatically improves coverage.** Pattern matching alone covers ~25% of rules in a typical CLAUDE.md. With LLM evaluation, coverage jumps to ~85%. The LLM correctly evaluates rules like "TypeScript strict mode" and "Agent configs are data, not imperative code" that regex can't touch.
 - **Transparent about confidence.** Every adherence number shows its sample size, verification method, and confidence level. No numbers without context.
 
