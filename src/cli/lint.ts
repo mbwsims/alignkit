@@ -22,9 +22,8 @@ export function registerLintCommand(program: Command): void {
     .description('Lint instruction files for issues')
     .option('--format <format>', 'output format: terminal, json, or markdown', 'terminal')
     .option('--deep', 'run deep AI-powered analysis (requires ANTHROPIC_API_KEY)')
-    .option('--all', 'analyze all discovered instruction files')
     .option('--ci', 'exit with non-zero code if any issues are found (for CI pipelines)')
-    .action(async (file: string | undefined, options: { format: string; deep: boolean; all: boolean; ci: boolean }) => {
+    .action(async (file: string | undefined, options: { format: string; deep: boolean; ci: boolean }) => {
       const cwd = process.cwd();
       const config = loadConfig(cwd);
       const discovered = discoverInstructionFiles(cwd);
@@ -36,19 +35,13 @@ export function registerLintCommand(program: Command): void {
       if (file) {
         // Explicit file argument — resolve to absolute
         filesToAnalyze = [path.resolve(cwd, file)];
-      } else if (options.all) {
-        if (discovered.length === 0) {
-          console.error('Error: No instruction files found.');
-          process.exit(1);
-        }
-        filesToAnalyze = discovered.map((f) => f.absolutePath);
       } else {
         if (discovered.length === 0) {
           console.error('Error: No instruction files found.');
           process.exit(1);
         }
-        // Analyze only the primary (first) file
-        filesToAnalyze = [discovered[0].absolutePath];
+        // Analyze all discovered files
+        filesToAnalyze = discovered.map((f) => f.absolutePath);
       }
 
       // Select reporter

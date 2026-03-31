@@ -134,7 +134,7 @@ alignkit includes an MCP server for Claude Code integration. When used as an MCP
   "mcpServers": {
     "alignkit": {
       "command": "npx",
-      "args": ["-y", "alignkit-mcp"]
+      "args": ["-y", "-p", "alignkit", "alignkit-mcp"]
     }
   }
 }

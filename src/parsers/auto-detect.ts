@@ -11,7 +11,7 @@ export interface DiscoveredFile {
   isRoot: boolean;
 }
 
-const IGNORE_PATTERNS = ['**/node_modules/**', '**/dist/**', '**/.git/**'];
+const IGNORE_PATTERNS = ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/.claude/worktrees/**'];
 
 const ROOT_PRIORITY: Record<string, number> = {
   'CLAUDE.md': 0,

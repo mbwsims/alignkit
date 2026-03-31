@@ -59,7 +59,7 @@ describe('lint command integration', () => {
     expect(status).not.toBe(0);
   });
 
-  it('--all flag analyzes both files and output contains results for each', () => {
+  it('default lint analyzes all discovered files', () => {
     const tmpDir = mkdtempSync(path.join(tmpdir(), 'alignkit-test-'));
 
     writeFileSync(
@@ -71,12 +71,10 @@ describe('lint command integration', () => {
       '# Agent Rules\n\n- Run tests before committing\n- Never commit secrets\n'
     );
 
-    const { stdout, status } = runCli(['lint', '--all', '--format', 'json'], tmpDir);
+    const { stdout, status } = runCli(['lint', '--format', 'json'], tmpDir);
     expect(status).toBe(0);
 
-    // When --all is used, multiple JSON objects are printed (one per file)
-    // We need to parse each line as a separate JSON object, or the output may be
-    // concatenated JSON objects. Parse lines that start with '{'.
+    // Multiple JSON objects are printed (one per file)
     const jsonBlocks = stdout
       .split(/(?<=\})\s*(?=\{)/)
       .map((s) => s.trim())

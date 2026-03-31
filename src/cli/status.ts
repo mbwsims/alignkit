@@ -66,7 +66,7 @@ export function computeStatus(
   sessions: SessionResult[],
 ): string {
   if (sessions.length === 0) {
-    return 'No history found. Run `alignkit watch` or `alignkit check` first.';
+    return 'No history found. Run `alignkit check` first to analyze your sessions, or `alignkit watch` to build history over time.';
   }
 
   // Overall adherence

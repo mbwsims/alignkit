@@ -260,8 +260,9 @@ export function registerCheckCommand(program: Command): void {
     .option('--fresh', 'Re-parse all sessions (ignore history cache)')
     .option('--deep', 'Use LLM to evaluate unverifiable rules (~$0.05/session, requires ANTHROPIC_API_KEY)')
     .option('--no-deep', 'Skip LLM evaluation even if API key is available')
+    .option('--since-days <days>', 'Analyze sessions from the last N days (overrides file modification date)')
     .option('--format <format>', 'Output format: terminal, json, markdown', 'terminal')
-    .action(async (file: string | undefined, options: { fresh?: boolean; deep?: boolean; format: string }) => {
+    .action(async (file: string | undefined, options: { fresh?: boolean; deep?: boolean; sinceDays?: string; format: string }) => {
       const cwd = process.cwd();
 
       // 1. Auto-discover instruction file
@@ -289,7 +290,13 @@ export function registerCheckCommand(program: Command): void {
       const rulesVersion = HistoryStore.computeRulesVersion(filePath);
 
       // 4. Determine since date
-      const sinceDate = getFileSince(filePath, cwd);
+      let sinceDate: Date;
+      if (options.sinceDays !== undefined) {
+        const days = parseInt(options.sinceDays, 10);
+        sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      } else {
+        sinceDate = getFileSince(filePath, cwd);
+      }
 
       // 5. Read sessions
       const sessions = readSessions({ cwd, since: sinceDate });
