@@ -14,7 +14,7 @@ const PATTERNS: Array<{ category: RuleCategory; pattern: RegExp }> = [
   {
     category: 'process-ordering',
     pattern:
-      /\b(before|after|first|then|prior to)\b.*\b(run|test|build|commit|deploy|lint|check|install|format|push|merge)\b|\b(run|test|build|commit|deploy|lint|check|install|format|push|merge)\b.*\b(before|after|first|then|prior to)\b/i,
+      /\b(before|after|first|then|prior to)\b.*\b(run|test|build|commit|deploy|lint|check|install|format|push|merge|rename|move|split|separate|regenerat)\b|\b(run|test|build|commit|deploy|lint|check|install|format|push|merge|rename|move|split|separate|regenerat)\b.*\b(before|after|first|then|prior to|separate from)\b|\b(separate from|separate\b.*\bfrom)\b/i,
   },
   {
     category: 'meta',

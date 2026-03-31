@@ -8,14 +8,21 @@ const SPLIT_VERBS = /\b(always|never|use|run|create|prefer)\b/i;
 // Conditional prefixes that prevent splitting on the first sentence
 const CONDITIONAL_PREFIXES = /^(when|if|for|during)\b/i;
 
+// Minimum length for a rule to be meaningful (filters out fragments)
+const MIN_RULE_LENGTH = 15;
+
 // Patterns that mark text as normative (an instruction or constraint).
 // Includes imperative verbs AND declarative constraint patterns.
 const NORMATIVE_PATTERN = new RegExp(
   [
-    // Imperative verbs
+    // Imperative verbs (direct commands)
     /\b(always|never|must|should|use|run|create|prefer|avoid|ensure|write|do not|don't|make sure|keep)\b/,
     // Declarative constraints: "X for all Y", "no X except Y", "only X"
     /\b(for all|no\s+\w+\s+(except|unless)|not\s+\w+\s+(except|unless)|only)\b/,
+    // Strong directives in caps (NEVER, ALWAYS, etc.)
+    /\b(NEVER|ALWAYS|MUST|REQUIRED|IMPORTANT)\b/,
+    // Process directives: "X separate from Y", "commit both X and Y"
+    /\b(separate from|commit both)\b/,
     // Convention declarations: "TypeScript strict mode" (bare noun phrase under a conventions/rules heading)
     // These are handled by section context below, not by this pattern.
   ]
@@ -96,7 +103,7 @@ function splitCompoundRule(text: string): string[] {
     return [text];
   }
 
-  return sentences.map((s) => s.trim()).filter((s) => s.length > 0);
+  return sentences.map((s) => s.trim()).filter((s) => s.length >= MIN_RULE_LENGTH);
 }
 
 /**
@@ -118,7 +125,7 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
     const lineEnd = paragraphLines[paragraphLines.length - 1].lineNum;
     paragraphLines = [];
 
-    if (!joined) return;
+    if (!joined || joined.length < MIN_RULE_LENGTH) return;
 
     // Only add if the paragraph contains normative (imperative) language
     if (isNormative(joined, currentSection)) {
@@ -166,7 +173,7 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
       // Only add list items that contain normative language.
       // This filters out documentation items like "**Framework:** Next.js 16"
       // and command references like "`pnpm dev` — Start dev server".
-      if (isNormative(itemText, currentSection)) {
+      if (itemText.length >= MIN_RULE_LENGTH && isNormative(itemText, currentSection)) {
         rawRules.push({
           text: itemText,
           section: currentSection,
