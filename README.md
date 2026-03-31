@@ -36,52 +36,61 @@ npx alignkit check --deep
 
 ### `alignkit lint`
 
+Finds structural issues — no API key needed, runs instantly.
+
 ```
-CLAUDE.md — 62 rules, ~1,608 tokens (estimated)
+CLAUDE.md — 34 rules, ~1,200 tokens (estimated)
 
-  ⚠ REDUNDANT  "Always show user feedback for errors"
-     This rule is similar to another rule: "Always have onError handler..."
+  ⚠ VAGUE       "Be careful with state management"
+     No verifiable behavior. Rewrite as: "Always/Never [action] when [condition]"
 
-  ⚠ STALE      References "Tailwind v3" — verify current
+  ⚠ CONFLICT    "Always use named exports" contradicts
+     "Use default exports for React components"
 
-  ⚠ ORDERING   3 high-priority rules appear after line 100.
+  ⚠ REDUNDANT   "Always show user feedback for errors" is similar to
+     "Always have onError handler with user feedback"
+
+  ⚠ STALE       References "React 18" — verify current
+
+  ⚠ ORDERING    5 high-priority rules appear after line 80.
      Agents attend more to early content.
 
-HEALTH  62 rules, 16 auto-verifiable, 1 redundant, 1 stale
-TOKENS  ~1,608 (~0.8% of context window). Recommended: under 2,000.
+HEALTH  34 rules, 22 auto-verifiable, 3 vague, 1 conflict, 1 redundant
+TOKENS  ~1,200 (~0.6% of context window). Recommended: under 2,000.
 
 QUICK WINS
   → Merge 1 redundant rule pair → run alignkit optimize
-  → Move 6 high-priority rules to top of file → run alignkit optimize
-  → Verify 1 version reference is current
+  → Move 5 high-priority rules to top of file → run alignkit optimize
 ```
 
 ### `alignkit lint --deep`
 
-Everything above, plus:
+Everything above, plus LLM-powered analysis of your rules against your project structure.
 
 ```
 EFFECTIVENESS PREDICTIONS
   ⚠ LOW     "Prefer composition over inheritance"
-           Too abstract — doesn't specify when/how to apply.
-           Rewrite: "Use dependency injection for services rather than
-           extending base classes"
+           Too abstract — doesn't specify when/how to apply in this project.
+           Rewrite: "Use hooks and composition for shared behavior between
+           components. Avoid class-based inheritance for React components."
 
 COVERAGE GAPS
   ✗ MISSING  Error handling
-           No guidance for handling API errors, rate limits, or network
-           failures. @anthropic-ai/sdk dependency suggests API integration.
+           No guidance for handling API errors or network failures, but
+           project has 12 API routes and axios in dependencies.
 
   ✗ MISSING  Test organization
-           No rules for test structure despite 40+ test files in test/.
+           No rules for test structure despite 40+ test files.
 
 CONSOLIDATION
   ⚠ MERGE   3 error-handling rules could merge (saves ~45 tokens):
            "Always handle errors with user feedback: catch all errors, log
-           appropriately, and show meaningful messages."
+           appropriately, and show meaningful messages to users."
 ```
 
 ### `alignkit check --deep`
+
+Measures per-rule adherence from your Claude Code session history. `--deep` uses an LLM to evaluate rules that pattern matching can't cover.
 
 ```
 CLAUDE.md last modified: 5 days ago
@@ -89,9 +98,11 @@ Found 14 sessions since then.
 
  "Use pnpm, not npm"                     9/9       100% ✓    high    auto:bash-keyword
  "Run tests before committing"           12/14      86% ✓    medium  auto:bash-sequence
- "TypeScript strict mode"                14/14     14/14     100% ✓    medium  llm-judge
- "Agent configs are data, not code"       8/14      8/8      100% ✓    medium  llm-judge
+ "TypeScript strict mode"                14/14     100% ✓    medium  llm-judge
+ "Prisma for all data access"            11/14      79% ~    medium  llm-judge
  "Add JSDoc to public functions"          2/7       29% ✗    medium  llm-judge
+
+ 5 rules verified · 2 unverifiable
 ```
 
 Every number includes sample size, verification method, and confidence level.
