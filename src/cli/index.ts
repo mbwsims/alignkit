@@ -6,6 +6,7 @@ import { registerWatchCommand } from './watch.js';
 import { registerStatusCommand } from './status.js';
 import { registerReportCommand } from './report.js';
 import { registerOptimizeCommand } from './optimize.js';
+import { registerInitCommand } from './init.js';
 
 const program = new Command();
 
@@ -20,11 +21,12 @@ registerWatchCommand(program);
 registerStatusCommand(program);
 registerReportCommand(program);
 registerOptimizeCommand(program);
+registerInitCommand(program);
 
 // Default to lint when no subcommand is given
 // e.g., `npx alignkit` runs lint, `npx alignkit --deep` runs lint --deep
 if (process.argv.length <= 2 || (process.argv.length > 2 && !process.argv.slice(2).some(arg =>
-  ['lint', 'check', 'watch', 'status', 'report', 'optimize', 'help', '--help', '-h', '--version', '-V'].includes(arg)
+  ['lint', 'check', 'watch', 'status', 'report', 'optimize', 'init', 'help', '--help', '-h', '--version', '-V'].includes(arg)
 ))) {
   // Insert 'lint' as the subcommand
   process.argv.splice(2, 0, 'lint');
