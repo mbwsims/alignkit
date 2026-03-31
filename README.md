@@ -10,15 +10,20 @@ npx alignkit
 
 ## What it does
 
-**`lint`** finds problems in your instruction files before the agent ever sees them — vague rules, contradictions, redundancies, stale version references, and poor ordering.
+**`init`** don't have a CLAUDE.md yet? This generates a starter one for your project. Detects your stack (framework, test runner, database, styling, package manager) and assembles rules from templates. With `--deep`, uses an LLM for a more tailored result.
 
-**`lint --deep`** uses an LLM to go further: predicts which rules the agent is likely to ignore, identifies important behaviors your rules don't cover, and suggests how to consolidate related rules into fewer, stronger ones.
+**`lint`** finds problems in your instruction files before the agent ever sees them — vague rules, contradictions, redundancies, stale version references, poor ordering, formatting rules that belong in a linter, and critical rules that use weak language.
+
+**`lint --deep`** uses an LLM to go further: predicts which rules the agent is likely to ignore, flags rules Claude already knows from reading code, identifies important behaviors your rules don't cover, and suggests how to consolidate related rules into fewer, stronger ones.
 
 **`check`** reads your Claude Code session history and measures whether each rule was actually followed. With `--deep`, it uses an LLM to evaluate rules that can't be verified by pattern matching alone — going from ~25% rule coverage to ~85%.
 
 ## Quick start
 
 ```bash
+# Generate a CLAUDE.md for your project
+npx alignkit init
+
 # Analyze your instruction file (zero config, free)
 npx alignkit
 
@@ -34,6 +39,39 @@ npx alignkit check --deep
 
 ## What the output looks like
 
+### `alignkit init`
+
+Detects your stack and generates a CLAUDE.md.
+
+```
+$ alignkit init
+Generated CLAUDE.md
+  Detected: pnpm, typescript, nextjs, vitest, prisma
+  18 lines. Run alignkit lint to check it.
+```
+
+```markdown
+## Code
+
+- TypeScript strict mode. No `any`.
+- Use server components by default. Client components only when needed.
+- Use Next.js App Router conventions for routing and layouts.
+- Use Prisma for all data access — no raw SQL.
+- Use Tailwind utility classes for styling. Avoid custom CSS unless necessary.
+
+## Process
+
+- Run tests before committing.
+- Never commit .env files or secrets.
+
+## Commands
+
+- `pnpm dev` — start dev server
+- `pnpm build` — production build
+- `pnpm test` — run tests with vitest
+- `pnpm lint` — run linter
+```
+
 ### `alignkit lint`
 
 Finds structural issues — no API key needed, runs instantly.
@@ -41,31 +79,37 @@ Finds structural issues — no API key needed, runs instantly.
 ```
 CLAUDE.md — 34 rules, ~1,200 tokens (estimated)
 
-  ⚠ VAGUE       "Be careful with state management"
+  ⚠ VAGUE          "Be careful with state management"
      No verifiable behavior. Rewrite as: "Always/Never [action] when [condition]"
 
-  ⚠ CONFLICT    "Always use named exports" contradicts
+  ⚠ CONFLICT       "Always use named exports" contradicts
      "Use default exports for React components"
 
-  ⚠ REDUNDANT   "Always show user feedback for errors" is similar to
+  ⚠ REDUNDANT      "Always show user feedback for errors" is similar to
      "Always have onError handler with user feedback"
 
-  ⚠ STALE       References "React 18" — verify current
+  ⚠ LINTER_JOB     "Use 2 space indentation"
+     This rule belongs in prettier/eslint, not CLAUDE.md.
 
-  ⚠ ORDERING    5 high-priority rules appear after line 80.
+  ⚠ WEAK_EMPHASIS  "You should use Prisma for data access"
+     High-priority rule uses weak language. Use MUST, NEVER, ALWAYS.
+
+  ⚠ ORDERING       5 high-priority rules appear after line 80.
      Agents attend more to early content.
 
-HEALTH  34 rules, 22 auto-verifiable, 3 vague, 1 conflict, 1 redundant
+HEALTH  34 rules, 22 auto-verifiable, 3 vague, 1 linter-job, 1 weak-emphasis
 TOKENS  ~1,200 (~0.6% of context window). Recommended: under 2,000.
 
 QUICK WINS
   → Merge 1 redundant rule pair → run alignkit optimize
   → Move 5 high-priority rules to top of file → run alignkit optimize
+  → Move 1 formatting rule to linter/formatter config
+  → Strengthen 1 critical rule with emphatic language (MUST, NEVER, ALWAYS)
 ```
 
 ### `alignkit lint --deep`
 
-Everything above, plus LLM-powered analysis of your rules against your project structure.
+Everything above, plus LLM-powered analysis of your rules against your project structure. Flags rules Claude already knows from reading code — these waste instruction budget.
 
 ```
 EFFECTIVENESS PREDICTIONS
@@ -73,6 +117,10 @@ EFFECTIVENESS PREDICTIONS
            Too abstract — doesn't specify when/how to apply in this project.
            Rewrite: "Use hooks and composition for shared behavior between
            components. Avoid class-based inheritance for React components."
+
+  ⚠ LOW     "Use meaningful variable names"
+           Claude already knows this from reading the code.
+           Rewrite: REMOVE
 
 COVERAGE GAPS
   ✗ MISSING  Error handling
@@ -157,9 +205,11 @@ npx alignkit check --format json
 
 ## How it works
 
-**Lint** parses your instruction file into individual rules, classifies each by type (tool-constraint, code-structure, process-ordering, style-guidance, behavioral), and runs six deterministic checks: vague language detection, near-duplicate detection, conflict detection, version reference flagging, ordering analysis, and token counting.
+**Init** detects your project's stack (package manager, framework, language, test runner, database, styling, linter, monorepo) and assembles rules from templates. With `--deep`, sends project metadata to the Anthropic API for a more tailored result.
 
-**Lint --deep** sends rule text and project metadata (directory names, dependency names — not source code) to the Anthropic API for effectiveness prediction, coverage gap analysis, and consolidation suggestions.
+**Lint** parses your instruction file into individual rules, classifies each by type (tool-constraint, code-structure, process-ordering, style-guidance, behavioral), and runs eight deterministic checks: vague language detection, near-duplicate detection, conflict detection, version reference flagging, ordering analysis, linter-job detection (rules that belong in eslint/prettier), weak emphasis detection (critical rules using "should" instead of "MUST"), and token/rule counting.
+
+**Lint --deep** sends rule text and project metadata (directory names, dependency names — not source code) to the Anthropic API for effectiveness prediction (including flagging rules Claude already knows), coverage gap analysis, and consolidation suggestions.
 
 **Check** reads Claude Code session logs from `~/.claude/projects/`, extracts tool_use actions (Bash commands, file writes, edits, reads), and verifies each rule using pattern-matching strategies:
 
@@ -198,16 +248,17 @@ npx alignkit check --format json
 
 ## Privacy
 
-**By default, alignkit is fully local.** `lint`, `check`, `watch`, `status`, `report`, and `optimize` never make network requests. Your instruction files, session logs, and source code stay on your machine.
+**By default, alignkit is fully local.** `init`, `lint`, `check`, `watch`, `status`, `report`, and `optimize` never make network requests. Your instruction files, session logs, and source code stay on your machine.
 
-**Two opt-in features make API calls:**
+**Opt-in features that make API calls:**
 
 | Feature | What's sent to the Anthropic API |
 |---|---|
-| `--deep` (lint) | Rule text + project metadata (directory names, dependency names). **Not** source code. |
-| `--deep` (check) | Rule text + session action summaries (commands run, files written). |
+| `init --deep` | Project metadata (directory names, dependency names, scripts). **Not** source code. |
+| `lint --deep` | Rule text + project metadata (directory names, dependency names). **Not** source code. |
+| `check --deep` | Rule text + session action summaries (commands run, files written). |
 
-Both require `ANTHROPIC_API_KEY`. If you never set it, nothing ever leaves your machine.
+All require `ANTHROPIC_API_KEY`. If you never set it, nothing ever leaves your machine.
 
 No telemetry. No analytics. No phone-home.
 
