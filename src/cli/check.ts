@@ -387,6 +387,20 @@ export function registerCheckCommand(program: Command): void {
           break;
       }
 
+      // Compute unresolved rules from final adherence data (not just from this run)
+      if (totalUnresolved === 0 && !options.deep) {
+        const unresolvedFromData = adherenceData.filter(
+          (d) => d.topMethod === 'unmapped'
+        );
+        if (unresolvedFromData.length > 0) {
+          totalUnresolved = unresolvedFromData.length;
+          totalAutoVerified = adherenceData.length - unresolvedFromData.length;
+          unresolvedRuleNames = unresolvedFromData.map((d) =>
+            d.rule.text.length > 40 ? d.rule.text.slice(0, 39) + '…' : d.rule.text,
+          );
+        }
+      }
+
       // Nudge: if there are unresolved rules and --deep wasn't used, suggest it
       if (!options.deep && totalUnresolved > 0 && options.format === 'terminal') {
         console.log('');
