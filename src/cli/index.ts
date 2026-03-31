@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name('alignkit')
   .description('Instruction intelligence for coding agents')
-  .version('0.1.2');
+  .version('0.1.3');
 
 registerLintCommand(program);
 registerCheckCommand(program);
