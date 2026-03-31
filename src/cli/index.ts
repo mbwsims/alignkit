@@ -30,4 +30,4 @@ if (process.argv.length <= 2 || (process.argv.length > 2 && !process.argv.slice(
   process.argv.splice(2, 0, 'lint');
 }
 
-program.parse();
+program.parseAsync();

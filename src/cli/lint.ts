@@ -23,7 +23,8 @@ export function registerLintCommand(program: Command): void {
     .option('--format <format>', 'output format: terminal, json, or markdown', 'terminal')
     .option('--deep', 'run deep AI-powered analysis (requires ANTHROPIC_API_KEY)')
     .option('--all', 'analyze all discovered instruction files')
-    .action(async (file: string | undefined, options: { format: string; deep: boolean; all: boolean }) => {
+    .option('--ci', 'exit with non-zero code if any issues are found (for CI pipelines)')
+    .action(async (file: string | undefined, options: { format: string; deep: boolean; all: boolean; ci: boolean }) => {
       const cwd = process.cwd();
       const config = loadConfig(cwd);
       const discovered = discoverInstructionFiles(cwd);
@@ -67,7 +68,13 @@ export function registerLintCommand(program: Command): void {
       const results: LintResult[] = [];
 
       for (const filePath of filesToAnalyze) {
-        const content = readFileSync(filePath, 'utf-8');
+        let content: string;
+        try {
+          content = readFileSync(filePath, 'utf-8');
+        } catch (err) {
+          console.error(`Error: Cannot read file "${filePath}".`);
+          process.exit(1);
+        }
 
         // Parse
         let rules = parseInstructionFile(content, filePath);
@@ -112,6 +119,17 @@ export function registerLintCommand(program: Command): void {
 
         // Print formatted output for this file
         console.log(reporter.report(result));
+      }
+
+      // CI mode: exit with non-zero code if any issues found
+      if (options.ci) {
+        const totalDiags = results.reduce(
+          (sum, r) => sum + r.rules.reduce((s, rule) => s + rule.diagnostics.length, 0),
+          0,
+        );
+        if (totalDiags > 0) {
+          process.exitCode = 1;
+        }
       }
     });
 }
