@@ -7,14 +7,14 @@ Confirmed by inspecting a live Claude Code installation (v2.1.78, March 2026).
 ```
 ~/.claude/
 ├── projects/
-│   ├── -Users-msims-Documents-GitHub-agent-lint/     # path-encoded
-│   │   ├── 6dd49b50-...jsonl                         # session file
+│   ├── -Users-you-projects-my-app/               # path-encoded
+│   │   ├── 6dd49b50-...jsonl                      # session file
 │   │   ├── subagents/
 │   │   │   ├── agent-a470a53e802260a8e.jsonl
 │   │   │   └── agent-a470a53e802260a8e.meta.json
-│   │   └── memory/                                    # optional
-│   ├── -Users-msims-Documents-GitHub-idea-canvas-packages-agentcast/
-│   │   ├── sessions-index.json                        # only multi-session projects
+│   │   └── memory/                                 # optional
+│   ├── -Users-you-projects-monorepo-packages-api/
+│   │   ├── sessions-index.json                     # only multi-session projects
 │   │   ├── 68d10af6-...jsonl
 │   │   ├── a1b2c3d4-...jsonl
 │   │   └── ...
@@ -23,7 +23,7 @@ Confirmed by inspecting a live Claude Code installation (v2.1.78, March 2026).
 ### Project Directory Naming
 
 Path encoding: replace every `/` with `-`.
-- `/Users/msims/Documents/GitHub/agent-lint` → `-Users-msims-Documents-GitHub-agent-lint`
+- `/Users/you/projects/my-app` → `-Users-you-projects-my-app`
 - Decode: strip leading `-`, replace remaining `-` with `/`, prepend `/`
 
 **Caveat:** This encoding is ambiguous if directory names contain hyphens. In practice this works because most paths don't have hyphens in the same positions as path separators. For robustness, match against CWD rather than trying to decode.
@@ -74,14 +74,14 @@ A session file contains multiple line types. **Not all lines are `{ type, messag
 
 | type | count | contains tool actions? |
 |---|---|---|
-| `assistant` | ~500 | ✓ (tool_use in message.content) |
-| `user` | ~440 | ✓ (tool_result in message.content) |
-| `progress` | ~650 | ✗ (UI progress tracking) |
-| `agent_progress` | ~540 | ✗ (subagent progress) |
-| `hook_progress` | ~100 | ✗ (hook execution) |
-| `queue-operation` | ~30 | ✗ (enqueue/dequeue) |
-| `system` | ~16 | ✗ (system events) |
-| `last-prompt` | ~3 | ✗ (session resume) |
+| `assistant` | ~500 | Yes (tool_use in message.content) |
+| `user` | ~440 | Yes (tool_result in message.content) |
+| `progress` | ~650 | No (UI progress tracking) |
+| `agent_progress` | ~540 | No (subagent progress) |
+| `hook_progress` | ~100 | No (hook execution) |
+| `queue-operation` | ~30 | No (enqueue/dequeue) |
+| `system` | ~16 | No (system events) |
+| `last-prompt` | ~3 | No (session resume) |
 
 **For alignkit, we only need `assistant` lines** — specifically the `tool_use` blocks within `message.content`.
 
@@ -195,14 +195,4 @@ Subagent sessions are stored separately in `subagents/` directory:
 - `agent-{agentId}.jsonl` — same format as main session
 - `agent-{agentId}.meta.json` — `{ "agentType": "general-purpose", "description": "..." }`
 
-**For alignkit v1:** We should read subagent files too, since agents delegate work there. A rule like "use pnpm" might be followed in a subagent session, not the main session.
-
-## What Was Wrong in the Original Spec
-
-1. ~~`~/.claude/projects/<hash>/`~~ → Path-encoded names, not hashes
-2. ~~Each line has `type` and `message`~~ → Only `assistant` and `user` lines have `message`. Most lines are progress/queue-operation/system.
-3. ~~`sessions-index.json` always exists~~ → Only for multi-session projects
-4. ~~`isCompactSummary: true` compaction markers~~ → Not observed in live data
-5. ~~One sessions-index.json = one project path~~ → Can contain multiple projectPath values
-6. Tool_use blocks include `caller` field and live inside `message.content` array alongside `thinking` and `text` blocks
-7. Subagent work is stored in separate files under `subagents/`
+Subagent files should be included when parsing sessions, since agents delegate work there. A rule like "use pnpm" might be followed in a subagent session, not the main session.

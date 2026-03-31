@@ -4,6 +4,7 @@ dist/
 .alignkit/
 *.tsbuildinfo
 .env
+.mcp.json
 
 # Generated output files
 *.optimized.md
