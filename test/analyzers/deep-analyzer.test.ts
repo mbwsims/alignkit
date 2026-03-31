@@ -243,11 +243,15 @@ describe('analyzeDeep', () => {
 
     const { analyzeDeep } = await import('../../src/analyzers/deep-analyzer.js');
 
+    // Suppress expected warning output
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
     const rules = [makeRule('Use pnpm, not npm')];
     const output = await analyzeDeep(rules, '/tmp/test');
 
     // Should return undefined or partial result, not throw
     expect(output).toBeUndefined();
+    stderrWrite.mockRestore();
   });
 
   it('handles API call failure gracefully', async () => {
@@ -255,10 +259,14 @@ describe('analyzeDeep', () => {
 
     const { analyzeDeep } = await import('../../src/analyzers/deep-analyzer.js');
 
+    // Suppress expected warning output
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
     const rules = [makeRule('Use pnpm, not npm')];
     const output = await analyzeDeep(rules, '/tmp/test');
 
     expect(output).toBeUndefined();
+    stderrWrite.mockRestore();
   });
 
   it('does not add EFFECTIVENESS diagnostic for HIGH level rules', async () => {
