@@ -53,8 +53,8 @@ Return a JSON object with exactly these fields:
 }
 
 Guidelines:
-- effectiveness: Assess EVERY rule. Use the project context to judge — a rule referencing a tool not in dependencies is LOW. A rule that's concrete and matches the project structure is HIGH. A vague or abstract rule is MEDIUM or LOW.
-- suggestedRewrite: For LOW and vague rules, write a concrete, actionable rewrite that references actual project patterns (real directory names, real dependency names). The rewrite should be something an agent can unambiguously follow.
+- effectiveness: Assess EVERY rule. Use the project context to judge — a rule referencing a tool not in dependencies is LOW. A rule that's concrete and matches the project structure is HIGH. A vague or abstract rule is MEDIUM or LOW. Mark rules as LOW if they state something Claude would already know from reading the code (e.g., "Use meaningful variable names", "Handle errors properly", "Follow REST conventions") — these waste instruction budget. In the reason, say "Claude already knows this from reading the code."
+- suggestedRewrite: For LOW and vague rules, write a concrete, actionable rewrite that references actual project patterns (real directory names, real dependency names). The rewrite should be something an agent can unambiguously follow. For "Claude already knows" rules, set suggestedRewrite to "REMOVE" to indicate the rule should be deleted.
 - coverageGaps: Identify 3-5 important behaviors NOT covered, based on the project's actual tech stack and structure. Be specific — reference real directories and dependencies you can see. Don't suggest gaps for technologies not present.
 - consolidation: Find groups of related rules that can merge into fewer, stronger rules. The mergedText MUST be the complete merged rule — do NOT truncate it. Each merge should preserve all the original constraints.
 - Keep reasons concise (1-2 sentences). No filler.`;

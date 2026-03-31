@@ -43,7 +43,7 @@ export class TerminalReporter implements Reporter {
     // Diagnostics section — only show STATIC diagnostics inline
     // Deep analysis results (EFFECTIVENESS, REWRITE, COVERAGE_GAP, CONSOLIDATION)
     // are shown in their own sections below
-    const DEEP_CODES = new Set(['EFFECTIVENESS', 'REWRITE', 'COVERAGE_GAP', 'CONSOLIDATION']);
+    const DEEP_CODES = new Set<string>(['EFFECTIVENESS', 'REWRITE', 'COVERAGE_GAP', 'CONSOLIDATION']);
     const staticDiagnostics = result.rules.flatMap((rule) =>
       rule.diagnostics
         .filter((d) => !DEEP_CODES.has(d.code))
@@ -72,15 +72,25 @@ export class TerminalReporter implements Reporter {
     const vague = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'VAGUE').length;
     const conflicting = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT').length;
     const redundant = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'REDUNDANT').length;
+    const linterJob = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'LINTER_JOB').length;
+    const weakEmphasis = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'WEAK_EMPHASIS').length;
 
-    // HEALTH summary
+    // HEALTH summary — includes rule count with recommended ceiling
+    const ruleCount = result.rules.length;
+    const RULE_CEILING = 150;
+    const ruleCountStr = ruleCount > RULE_CEILING
+      ? pc.red(`${ruleCount} rules (recommended: under ${RULE_CEILING})`)
+      : `${ruleCount} rules`;
+
     let healthParts = [
-      `${result.rules.length} rules`,
+      ruleCountStr,
       `${auto} auto-verifiable`,
     ];
     if (vague > 0) healthParts.push(`${vague} vague`);
     if (conflicting > 0) healthParts.push(`${conflicting} conflicting`);
     if (redundant > 0) healthParts.push(`${redundant} redundant`);
+    if (linterJob > 0) healthParts.push(`${linterJob} linter-job`);
+    if (weakEmphasis > 0) healthParts.push(`${weakEmphasis} weak-emphasis`);
 
     lines.push(
       `${pc.bold('HEALTH')}  ${healthParts.join(', ')}`
@@ -122,6 +132,16 @@ export class TerminalReporter implements Reporter {
     const stale = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'STALE').length;
     if (stale > 0) {
       quickWins.push(`Verify ${stale} version reference${stale > 1 ? 's' : ''} ${stale > 1 ? 'are' : 'is'} current`);
+    }
+
+    // Linter-job rules
+    if (linterJob > 0) {
+      quickWins.push(`Move ${linterJob} formatting rule${linterJob > 1 ? 's' : ''} to linter/formatter config`);
+    }
+
+    // Weak emphasis on critical rules
+    if (weakEmphasis > 0) {
+      quickWins.push(`Strengthen ${weakEmphasis} critical rule${weakEmphasis > 1 ? 's' : ''} with emphatic language (MUST, NEVER, ALWAYS)`);
     }
 
     if (quickWins.length > 0) {

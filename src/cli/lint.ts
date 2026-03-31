@@ -8,6 +8,8 @@ import { detectDuplicates } from '../analyzers/duplicate-detector.js';
 import { detectConflicts } from '../analyzers/conflict-detector.js';
 import { flagVersions } from '../analyzers/version-flagger.js';
 import { analyzeOrdering } from '../analyzers/ordering-analyzer.js';
+import { detectLinterRules } from '../analyzers/linter-rule-detector.js';
+import { detectWeakEmphasis } from '../analyzers/emphasis-detector.js';
 import { analyzeTokens } from '../analyzers/token-counter.js';
 import { analyzeDeep } from '../analyzers/deep-analyzer.js';
 import { TerminalReporter } from '../reporters/terminal.js';
@@ -78,6 +80,8 @@ export function registerLintCommand(program: Command): void {
         rules = detectConflicts(rules);
         rules = flagVersions(rules);
         rules = analyzeOrdering(rules);
+        rules = detectLinterRules(rules);
+        rules = detectWeakEmphasis(rules);
 
         // Token analysis
         const tokenAnalysis = analyzeTokens(rules, {
