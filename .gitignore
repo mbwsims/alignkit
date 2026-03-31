@@ -1,5 +1,10 @@
 node_modules/
 dist/
 .agentlint/
+.alignkit/
 *.tsbuildinfo
 .env
+
+# Generated output files
+*.optimized.md
+alignkit-diff.md

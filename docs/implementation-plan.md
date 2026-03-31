@@ -1,23 +1,23 @@
-# agentlint Tier 1 (lint) Implementation Plan
+# alignkit Tier 1 (lint) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship `agentlint lint` — static analysis of AI coding agent instruction files (CLAUDE.md, .cursorrules, AGENTS.md) via `npx agentlint lint`.
+**Goal:** Ship `alignkit lint` — static analysis of AI coding agent instruction files (CLAUDE.md, .cursorrules, AGENTS.md) via `npx alignkit lint`.
 
 **Architecture:** TypeScript CLI built with `commander`. Parsers extract rules from markdown/plaintext instruction files. Six analyzers run deterministic checks (token count, vague language, duplicates, conflicts, versions, ordering). Results formatted via pluggable reporters (terminal, JSON, markdown). Zero external dependencies beyond npm packages — no LLM calls for the base command.
 
 **Tech Stack:** TypeScript (ESM, Node 18+), commander, js-tiktoken, picocolors, globby, jsonc-parser, vitest
 
-**Spec:** `docs/superpowers/specs/2026-03-26-agentlint-v1-design.md` — Tier 1 sections only (Parsers, Static Analyzer, CLI lint command, Configuration, Project Structure, Key Dependencies)
+**Spec:** `docs/superpowers/specs/2026-03-26-alignkit-v1-design.md` — Tier 1 sections only (Parsers, Static Analyzer, CLI lint command, Configuration, Project Structure, Key Dependencies)
 
-**Scope of this plan:** Tier 1 only — `agentlint lint` with all six static analyzers and three reporters. `lint --deep` ships as a stub in this plan (prints "not yet implemented") — full LLM-powered analysis is a follow-on task once the base lint is validated. Tier 2 (check/watch/report/optimize/feedback) is a separate plan gated on session fixture capture.
+**Scope of this plan:** Tier 1 only — `alignkit lint` with all six static analyzers and three reporters. `lint --deep` ships as a stub in this plan (prints "not yet implemented") — full LLM-powered analysis is a follow-on task once the base lint is validated. Tier 2 (check/watch/report/optimize/feedback) is a separate plan gated on session fixture capture.
 
 ---
 
 ## File Structure
 
 ```
-agentlint/
+alignkit/
 ├── src/
 │   ├── cli/
 │   │   ├── index.ts              # CLI entry point, commander setup, command routing
@@ -44,7 +44,7 @@ agentlint/
 │   │   └── deep-analyzer.ts      # LLM-powered analysis (--deep), lazy-loads SDK
 │   │
 │   ├── config/
-│   │   └── loader.ts             # .agentlint.config.jsonc + package.json resolution
+│   │   └── loader.ts             # .alignkit.config.jsonc + package.json resolution
 │   │
 │   └── reporters/
 │       ├── types.ts              # Reporter interface
@@ -112,12 +112,12 @@ agentlint/
 
 ```json
 {
-  "name": "agentlint",
+  "name": "alignkit",
   "version": "0.1.0",
   "description": "Measure, debug, and optimize AI coding agent instruction files",
   "type": "module",
   "bin": {
-    "agentlint": "./dist/cli/index.js"
+    "alignkit": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -176,7 +176,7 @@ export default defineConfig({
 
 - [ ] **Step 5: Update .gitignore**
 
-Append: `node_modules/`, `dist/`, `.agentlint/`, `*.tsbuildinfo`
+Append: `node_modules/`, `dist/`, `.alignkit/`, `*.tsbuildinfo`
 
 - [ ] **Step 6: Create CLI stub**
 
@@ -188,7 +188,7 @@ import { Command } from 'commander';
 const program = new Command();
 
 program
-  .name('agentlint')
+  .name('alignkit')
   .description('Measure, debug, and optimize AI coding agent instruction files')
   .version('0.1.0');
 
@@ -198,7 +198,7 @@ program.parse();
 - [ ] **Step 7: Verify build and run**
 
 Run: `pnpm build && node dist/cli/index.js --help`
-Expected: Help output with name "agentlint" and version "0.1.0"
+Expected: Help output with name "alignkit" and version "0.1.0"
 
 - [ ] **Step 8: Commit**
 
@@ -512,7 +512,7 @@ git commit -m "feat: add terminal, JSON, and markdown reporters"
 
 - [ ] **Step 1: Implement config loader**
 
-Reads `.agentlint.config.jsonc` (using `jsonc-parser`) or `package.json` `agentlint` key. Returns `AgentlintConfig` with optional fields: instructionFile, rules, thresholds, contextWindow. Returns empty object if no config found.
+Reads `.alignkit.config.jsonc` (using `jsonc-parser`) or `package.json` `alignkit` key. Returns `AgentlintConfig` with optional fields: instructionFile, rules, thresholds, contextWindow. Returns empty object if no config found.
 
 - [ ] **Step 2: Verify it compiles**
 
@@ -540,7 +540,7 @@ git commit -m "feat: add config loader (JSONC + package.json)"
 
 Tests use `execFileSync` (not `exec`) to run `node dist/cli/index.js lint <fixture>`. Note: integration tests against `dist/` cannot run until the build step — write them first, but verify them only after `pnpm build` in Step 5 (don't try to "verify they fail" — they'll throw process errors, not clean test failures).
 
-Test cases: runs against fixture and exits 0, JSON output is valid, markdown output contains header, auto-detect handles missing files with exit 1. Additionally: test `--all` flag by creating a temp directory with two instruction files (CLAUDE.md + AGENTS.md), running `agentlint lint --all`, and asserting the JSON output contains results for both files.
+Test cases: runs against fixture and exits 0, JSON output is valid, markdown output contains header, auto-detect handles missing files with exit 1. Additionally: test `--all` flag by creating a temp directory with two instruction files (CLAUDE.md + AGENTS.md), running `alignkit lint --all`, and asserting the JSON output contains results for both files.
 
 - [ ] **Step 2: Implement lint.ts command handler**
 
