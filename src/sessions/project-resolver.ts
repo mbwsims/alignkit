@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 /**
  * Encode a CWD path into the directory name format used by Claude Code.
  * Every `/` is replaced with `-`.
- * e.g. `/Users/msims/Documents` → `-Users-msims-Documents`
+ * e.g. `/Users/you/projects/my-app` → `-Users-you-projects-my-app`
  */
 export function encodeProjectPath(cwd: string): string {
   return cwd.replace(/\//g, '-');

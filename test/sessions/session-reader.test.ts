@@ -46,8 +46,8 @@ function makeAssistantLine(opts: {
 
 describe('readSessions', () => {
   let tmpDir: string;
-  const cwd = '/Users/msims/Documents/GitHub/test-project';
-  const encoded = '-Users-msims-Documents-GitHub-test-project';
+  const cwd = '/Users/you/projects/test-project';
+  const encoded = '-Users-you-projects-test-project';
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'alignkit-session-'));

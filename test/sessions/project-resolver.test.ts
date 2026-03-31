@@ -7,8 +7,8 @@ import { encodeProjectPath, resolveProjectDir } from '../../src/sessions/project
 
 describe('encodeProjectPath', () => {
   it('replaces all slashes with hyphens', () => {
-    expect(encodeProjectPath('/Users/msims/Documents/GitHub/agent-lint')).toBe(
-      '-Users-msims-Documents-GitHub-agent-lint',
+    expect(encodeProjectPath('/Users/you/projects/my-app')).toBe(
+      '-Users-you-projects-my-app',
     );
   });
 
@@ -38,8 +38,8 @@ describe('resolveProjectDir', () => {
   });
 
   it('finds project via direct path encoding match', () => {
-    const cwd = '/Users/msims/Documents/GitHub/agent-lint';
-    const encoded = '-Users-msims-Documents-GitHub-agent-lint';
+    const cwd = '/Users/you/projects/my-app';
+    const encoded = '-Users-you-projects-my-app';
     const projectDir = join(tmpDir, encoded);
     mkdirSync(projectDir, { recursive: true });
 
@@ -48,7 +48,7 @@ describe('resolveProjectDir', () => {
   });
 
   it('falls back to sessions-index.json scan when encoding does not match', () => {
-    const cwd = '/Users/msims/my-project';
+    const cwd = '/Users/you/other-project';
     // Create a directory with a different name (not the encoded form)
     const dirName = 'some-other-dir-name';
     const projectDir = join(tmpDir, dirName);
@@ -73,7 +73,7 @@ describe('resolveProjectDir', () => {
   });
 
   it('returns null when no directory matches CWD', () => {
-    const cwd = '/Users/msims/unknown-project';
+    const cwd = '/Users/you/unknown-project';
     // Create a directory with an index that does NOT match
     const dirName = 'other-project';
     const projectDir = join(tmpDir, dirName);
@@ -85,7 +85,7 @@ describe('resolveProjectDir', () => {
         {
           sessionId: 'sess-002',
           fullPath: join(projectDir, 'sess-002.jsonl'),
-          projectPath: '/Users/msims/different-project',
+          projectPath: '/Users/you/different-project',
           modified: '2026-03-27T10:00:00.000Z',
         },
       ],
