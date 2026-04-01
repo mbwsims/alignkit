@@ -32,6 +32,7 @@ describe('lintTool', () => {
 
     expect(result.file).toBe('CLAUDE.md');
     expect(result.ruleCount).toBeGreaterThan(0);
+    expect(result.fileDiagnostics).toEqual([]);
     expect(result.rules).toBeInstanceOf(Array);
     expect(result.rules.length).toBe(result.ruleCount);
 
@@ -122,6 +123,27 @@ describe('lintTool', () => {
 
     expect(result.file).toBe(join('sub', 'CLAUDE.md'));
     expect(result.ruleCount).toBeGreaterThan(0);
+  });
+
+  it('surfaces subagent frontmatter diagnostics separately from rules', () => {
+    const agentsDir = join(tmpDir, '.claude', 'agents');
+    mkdirSync(agentsDir, { recursive: true });
+    writeFileSync(
+      join(agentsDir, 'TestRunner.md'),
+      [
+        '---',
+        'name: TestRunner',
+        '---',
+        '',
+        'You are an expert in test automation. Focus on running the smallest relevant test coverage first.',
+      ].join('\n'),
+    );
+
+    const result = lintTool(tmpDir, join('.claude', 'agents', 'TestRunner.md'));
+
+    expect(result.fileDiagnostics.some((diagnostic) => diagnostic.code === 'METADATA')).toBe(true);
+    expect(result.fileDiagnostics.some((diagnostic) => diagnostic.message.includes('description'))).toBe(true);
+    expect(result.quickWins.some((win) => win.includes('metadata'))).toBe(true);
   });
 
   it('loads effective Claude memory stack for nested files', () => {

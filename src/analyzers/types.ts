@@ -1,4 +1,4 @@
-import type { Rule } from '../parsers/types.js';
+import type { Diagnostic, Rule } from '../parsers/types.js';
 
 export interface DeepAnalysisResult {
   effectiveness: Array<{
@@ -29,6 +29,7 @@ export interface TokenAnalysis {
 export interface LintResult {
   file: string;
   rules: Rule[];
+  fileDiagnostics: Diagnostic[];
   tokenAnalysis: TokenAnalysis;
   discoveredFiles: string[];
   deepAnalysis?: DeepAnalysisResult;

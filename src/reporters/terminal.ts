@@ -45,13 +45,26 @@ export class TerminalReporter implements Reporter {
     // Deep analysis results (EFFECTIVENESS, REWRITE, COVERAGE_GAP, CONSOLIDATION)
     // are shown in their own sections below
     const DEEP_CODES = new Set<string>(['EFFECTIVENESS', 'REWRITE', 'COVERAGE_GAP', 'CONSOLIDATION']);
+    const fileDiagnostics = result.fileDiagnostics.map((d) => ({ d }));
     const staticDiagnostics = result.rules.flatMap((rule) =>
       rule.diagnostics
         .filter((d) => !DEEP_CODES.has(d.code))
         .map((d) => ({ rule, d }))
     );
 
-    if (staticDiagnostics.length > 0) {
+    if (fileDiagnostics.length > 0 || staticDiagnostics.length > 0) {
+      for (const { d } of fileDiagnostics) {
+        const icon =
+          d.severity === 'error'
+            ? pc.red('✗')
+            : pc.yellow('⚠');
+        const code =
+          d.severity === 'error'
+            ? pc.red(d.code)
+            : pc.yellow(d.code);
+        lines.push(`  ${icon} ${code}  ${pc.dim('(file)')}`);
+        lines.push(`     ${d.message}`);
+      }
       for (const { rule, d } of staticDiagnostics) {
         const icon =
           d.severity === 'error'

@@ -31,6 +31,7 @@ export class JsonReporter implements Reporter {
     const output: Record<string, unknown> = {
       file: result.file,
       ruleCount: result.rules.length,
+      fileDiagnostics: result.fileDiagnostics,
       tokenAnalysis: result.tokenAnalysis,
       diagnostics,
       rules,

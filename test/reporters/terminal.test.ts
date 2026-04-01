@@ -8,6 +8,7 @@ function makeLintResult(overrides?: Partial<LintResult>): LintResult {
   return {
     file: 'CLAUDE.md',
     rules: [],
+    fileDiagnostics: [],
     tokenAnalysis: {
       tokenCount: 500,
       contextWindowPercent: 2.5,
@@ -49,6 +50,18 @@ describe('TerminalReporter', () => {
     const result = makeLintResult({ rules: [rule] });
     const output = stripAnsi(reporter.report(result));
     expect(output).toContain('CONFLICT');
+  });
+
+  it('shows file-level METADATA diagnostics when present', () => {
+    const reporter = new TerminalReporter();
+    const result = makeLintResult({
+      fileDiagnostics: [
+        { severity: 'error', code: 'METADATA', message: 'Missing required `description` in subagent frontmatter.' },
+      ],
+    });
+    const output = stripAnsi(reporter.report(result));
+    expect(output).toContain('METADATA');
+    expect(output).toContain('(file)');
   });
 
   it('shows HEALTH summary line', () => {

@@ -21,7 +21,7 @@ export interface Diagnostic {
   severity: 'error' | 'warning';
   code: 'VAGUE' | 'CONFLICT' | 'REDUNDANT' | 'STALE' | 'ORDERING'
     | 'EFFECTIVENESS' | 'COVERAGE_GAP' | 'CONSOLIDATION' | 'REWRITE' | 'PLACEMENT'
-    | 'LINTER_JOB' | 'WEAK_EMPHASIS';
+    | 'LINTER_JOB' | 'WEAK_EMPHASIS' | 'METADATA';
   message: string;
   relatedRuleId?: string;
   placement?: PlacementSuggestion;
