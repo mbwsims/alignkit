@@ -239,12 +239,13 @@ npx alignkit check --format json
 
 ## Format support
 
-| Format | lint | lint --deep | check / watch / report / optimize |
+| Format | init | lint | check |
 |---|---|---|---|
 | CLAUDE.md | Yes | Yes | Yes (Claude Code sessions) |
-| AGENTS.md | Yes | Yes | Yes (Claude Code sessions) |
-| .cursorrules | Yes | Yes | Not yet |
-| .cursor/rules | Yes | Yes | Not yet |
+| AGENTS.md | — | Yes | Yes (Claude Code sessions) |
+| .cursorrules | — | Yes | Not yet |
+| .cursor/rules | — | Yes | Not yet |
+| .claude/skills/*.md | Coming soon | Coming soon | — |
 
 ## Privacy
 
