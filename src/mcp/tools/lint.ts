@@ -6,6 +6,8 @@ import { detectDuplicates } from '../../analyzers/duplicate-detector.js';
 import { detectConflicts } from '../../analyzers/conflict-detector.js';
 import { flagVersions } from '../../analyzers/version-flagger.js';
 import { analyzeOrdering } from '../../analyzers/ordering-analyzer.js';
+import { detectLinterRules } from '../../analyzers/linter-rule-detector.js';
+import { advisePlacement } from '../../analyzers/placement-advisor.js';
 import { analyzeTokens } from '../../analyzers/token-counter.js';
 import { collectProjectContext } from '../../analyzers/project-context.js';
 import type { TokenAnalysis } from '../../analyzers/types.js';
@@ -23,7 +25,16 @@ export interface LintToolResult {
       patterns: string[];
       source: string;
     };
-    diagnostics: Array<{ code: string; severity: string; message: string }>;
+    diagnostics: Array<{
+      code: string;
+      severity: string;
+      message: string;
+      placement?: {
+        target: string;
+        confidence: string;
+        detail?: string;
+      };
+    }>;
   }>;
   tokenAnalysis: TokenAnalysis;
   projectContext: ProjectContext;
@@ -72,6 +83,33 @@ function computeQuickWins(
     );
   }
 
+  const scopedPlacementCount = rules.filter((r) =>
+    r.diagnostics.some((d) => d.code === 'PLACEMENT' && d.placement?.target === 'scoped-rule'),
+  ).length;
+  if (scopedPlacementCount > 0) {
+    wins.push(
+      `Move ${scopedPlacementCount} path-specific rule${scopedPlacementCount > 1 ? 's' : ''} into .claude/rules/.`,
+    );
+  }
+
+  const hookPlacementCount = rules.filter((r) =>
+    r.diagnostics.some((d) => d.code === 'PLACEMENT' && d.placement?.target === 'hook'),
+  ).length;
+  if (hookPlacementCount > 0) {
+    wins.push(
+      `Convert ${hookPlacementCount} deterministic automation rule${hookPlacementCount > 1 ? 's' : ''} into Claude hooks.`,
+    );
+  }
+
+  const subagentPlacementCount = rules.filter((r) =>
+    r.diagnostics.some((d) => d.code === 'PLACEMENT' && d.placement?.target === 'subagent'),
+  ).length;
+  if (subagentPlacementCount > 0) {
+    wins.push(
+      `Move ${subagentPlacementCount} reusable workflow rule${subagentPlacementCount > 1 ? 's' : ''} into .claude/agents/.`,
+    );
+  }
+
   if (tokenAnalysis.overBudget) {
     wins.push(
       `Reduce token count from ${tokenAnalysis.tokenCount} to under ${tokenAnalysis.budgetThreshold} (currently ${tokenAnalysis.contextWindowPercent.toFixed(1)}% of context window).`,
@@ -114,6 +152,8 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
   rules = detectConflicts(rules);
   rules = flagVersions(rules);
   rules = analyzeOrdering(rules);
+  rules = detectLinterRules(rules);
+  rules = advisePlacement(rules, cwd);
 
   // 4. Token analysis
   const tokenAnalysis = analyzeTokens(rules);
@@ -137,6 +177,13 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
       code: d.code,
       severity: d.severity,
       message: d.message,
+      placement: d.placement
+        ? {
+            target: d.placement.target,
+            confidence: d.placement.confidence,
+            detail: d.placement.detail,
+          }
+        : undefined,
     })),
   }));
 

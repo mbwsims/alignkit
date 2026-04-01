@@ -161,4 +161,25 @@ describe('lintTool', () => {
     const vagueWin = result.quickWins.find((w) => w.includes('vague'));
     expect(vagueWin).toBeDefined();
   });
+
+  it('surfaces placement diagnostics and quick wins', () => {
+    writeFileSync(
+      join(tmpDir, 'CLAUDE.md'),
+      [
+        '- For `apps/web/**`, use React Server Components by default.',
+        '- After every file edit, run eslint --fix on the changed file.',
+      ].join('\n'),
+    );
+
+    const result = lintTool(tmpDir);
+
+    expect(result.rules.some((rule) =>
+      rule.diagnostics.some((diagnostic) =>
+        diagnostic.code === 'PLACEMENT' && diagnostic.placement?.target === 'scoped-rule'))).toBe(true);
+    expect(result.rules.some((rule) =>
+      rule.diagnostics.some((diagnostic) =>
+        diagnostic.code === 'PLACEMENT' && diagnostic.placement?.target === 'hook'))).toBe(true);
+    expect(result.quickWins.some((win) => win.includes('.claude/rules'))).toBe(true);
+    expect(result.quickWins.some((win) => win.includes('hooks'))).toBe(true);
+  });
 });

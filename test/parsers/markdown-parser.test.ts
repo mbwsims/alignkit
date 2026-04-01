@@ -156,4 +156,19 @@ This tool helps you understand your rules.
       ]);
     });
   });
+
+  describe('event-driven instructions', () => {
+    it('treats after/before directives as normative rules', () => {
+      const content = [
+        '- After every file edit, run eslint --fix on the changed file.',
+        '- Before modifying production config, ask for confirmation.',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+      const texts = rules.map((rule) => rule.text);
+
+      expect(texts).toContain('After every file edit, run eslint --fix on the changed file.');
+      expect(texts).toContain('Before modifying production config, ask for confirmation.');
+    });
+  });
 });

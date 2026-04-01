@@ -12,7 +12,7 @@ npx alignkit
 
 **`init`** don't have a CLAUDE.md yet? This generates a starter one for your project. Detects your stack (framework, test runner, database, styling, package manager) and assembles rules from templates. With `--deep`, uses an LLM for a more tailored result.
 
-**`lint`** finds problems in your instruction files before the agent ever sees them — vague rules, contradictions, redundancies, stale version references, poor ordering, formatting rules that belong in a linter, and critical rules that use weak language.
+**`lint`** finds problems in your instruction files before the agent ever sees them — vague rules, contradictions, redundancies, stale version references, poor ordering, formatting rules that belong in a linter, critical rules that use weak language, and rules that belong in scoped files, hooks, or subagents instead of global memory.
 
 **`lint --deep`** uses an LLM to go further: predicts which rules the agent is likely to ignore, flags rules Claude already knows from reading code, identifies important behaviors your rules don't cover, and suggests how to consolidate related rules into fewer, stronger ones.
 

@@ -9,14 +9,22 @@ export type RuleCategory =
 export type Verifiability = 'auto' | 'user-config' | 'unverifiable';
 
 import type { RuleApplicability } from './rule-applicability.js';
+export type PlacementTarget = 'tool-config' | 'scoped-rule' | 'hook' | 'subagent';
+
+export interface PlacementSuggestion {
+  target: PlacementTarget;
+  confidence: 'high';
+  detail?: string;
+}
 
 export interface Diagnostic {
   severity: 'error' | 'warning';
   code: 'VAGUE' | 'CONFLICT' | 'REDUNDANT' | 'STALE' | 'ORDERING'
-    | 'EFFECTIVENESS' | 'COVERAGE_GAP' | 'CONSOLIDATION' | 'REWRITE'
+    | 'EFFECTIVENESS' | 'COVERAGE_GAP' | 'CONSOLIDATION' | 'REWRITE' | 'PLACEMENT'
     | 'LINTER_JOB' | 'WEAK_EMPHASIS';
   message: string;
   relatedRuleId?: string;
+  placement?: PlacementSuggestion;
 }
 
 export interface Rule {

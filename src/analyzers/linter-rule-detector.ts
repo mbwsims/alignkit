@@ -58,6 +58,11 @@ export function detectLinterRules(rules: Rule[]): Rule[] {
       severity: 'warning',
       code: 'LINTER_JOB',
       message: `This rule describes formatting/style that belongs in ${match.tool}, not CLAUDE.md. Move it to your linter/formatter config.`,
+      placement: {
+        target: 'tool-config',
+        confidence: 'high',
+        detail: match.tool,
+      },
     };
 
     return {

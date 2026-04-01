@@ -74,6 +74,7 @@ export class TerminalReporter implements Reporter {
     const conflicting = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT').length;
     const redundant = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'REDUNDANT').length;
     const linterJob = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'LINTER_JOB').length;
+    const placement = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'PLACEMENT').length;
     const weakEmphasis = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'WEAK_EMPHASIS').length;
     const pathScoped = result.rules.filter((r) => r.applicability?.kind === 'path-scoped').length;
 
@@ -92,6 +93,7 @@ export class TerminalReporter implements Reporter {
     if (conflicting > 0) healthParts.push(`${conflicting} conflicting`);
     if (redundant > 0) healthParts.push(`${redundant} redundant`);
     if (linterJob > 0) healthParts.push(`${linterJob} linter-job`);
+    if (placement > 0) healthParts.push(`${placement} misplaced`);
     if (weakEmphasis > 0) healthParts.push(`${weakEmphasis} weak-emphasis`);
     if (pathScoped > 0) healthParts.push(`${pathScoped} path-scoped`);
 
@@ -140,6 +142,24 @@ export class TerminalReporter implements Reporter {
     // Linter-job rules
     if (linterJob > 0) {
       quickWins.push(`Move ${linterJob} formatting rule${linterJob > 1 ? 's' : ''} to linter/formatter config`);
+    }
+
+    const scopedRulePlacement = result.rules.flatMap((r) => r.diagnostics)
+      .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'scoped-rule').length;
+    if (scopedRulePlacement > 0) {
+      quickWins.push(`Move ${scopedRulePlacement} path-specific rule${scopedRulePlacement > 1 ? 's' : ''} into .claude/rules/`);
+    }
+
+    const hookPlacement = result.rules.flatMap((r) => r.diagnostics)
+      .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'hook').length;
+    if (hookPlacement > 0) {
+      quickWins.push(`Convert ${hookPlacement} deterministic automation rule${hookPlacement > 1 ? 's' : ''} into Claude hooks`);
+    }
+
+    const subagentPlacement = result.rules.flatMap((r) => r.diagnostics)
+      .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'subagent').length;
+    if (subagentPlacement > 0) {
+      quickWins.push(`Move ${subagentPlacement} reusable workflow rule${subagentPlacement > 1 ? 's' : ''} into .claude/agents/`);
     }
 
     // Weak emphasis on critical rules

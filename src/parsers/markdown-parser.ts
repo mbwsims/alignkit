@@ -6,16 +6,16 @@ import { classifyRule } from './classifier.js';
 const SPLIT_VERBS = /\b(always|never|use|run|create|prefer)\b/i;
 
 // Conditional prefixes that prevent splitting on the first sentence
-const CONDITIONAL_PREFIXES = /^(when|if|for|during)\b/i;
+const CONDITIONAL_PREFIXES = /^(when|if|for|during|before|after)\b/i;
 
 // Minimum length for a rule to be meaningful (filters out fragments)
 const MIN_RULE_LENGTH = 15;
 
 const DIRECTIVE_START_PATTERN =
-  /^(?:(?:IMPORTANT|CRITICAL|NOTE):\s*)?(?:always|never|must|should|use|run|create|prefer|avoid|ensure|write|keep|do not(?!\s+have\b)|don't(?!\s+have\b)|make sure)\b/i;
+  /^(?:(?:IMPORTANT|CRITICAL|NOTE):\s*)?(?:always|never|must|should|use|run|create|prefer|avoid|ensure|write|keep|ask|do not(?!\s+have\b)|don't(?!\s+have\b)|make sure)\b/i;
 
 const CONDITIONAL_DIRECTIVE_PATTERN =
-  /^(?:when|if|for|during)\b.{0,160}\b(?:always|never|must|should|use|run|create|prefer|avoid|ensure|write|keep|do not|don't|make sure)\b/i;
+  /^(?:when|if|for|during|before|after)\b.{0,160}\b(?:always|never|must|should|use|run|create|prefer|avoid|ensure|write|keep|ask|do not|don't|make sure)\b/i;
 
 const INLINE_CONSTRAINT_PATTERN =
   /\b(?:use\s+\w+\s+(?:not|instead of)\s+\w+|prefer\s+\w+\s+over\s+\w+|separate from|commit both|for all|no\s+\w+\s+(?:except|unless)|not\s+\w+\s+(?:except|unless))\b/i;
