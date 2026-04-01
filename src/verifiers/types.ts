@@ -8,6 +8,7 @@ export type Observation =
       relevant: false;
       method: VerificationMethod;
       confidence: ObservationConfidence;
+      evidence?: string;
     }
   | {
       ruleId: string;
@@ -16,6 +17,7 @@ export type Observation =
       followed: boolean | null;
       method: VerificationMethod;
       confidence: ObservationConfidence;
+      evidence?: string;
     };
 
 export type VerificationMethod =

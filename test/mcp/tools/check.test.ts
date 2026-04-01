@@ -44,6 +44,7 @@ describe('checkTool', () => {
       expect(rule).toHaveProperty('adherence');
       expect(rule).toHaveProperty('method');
       expect(rule).toHaveProperty('confidence');
+      expect(rule).toHaveProperty('evidence');
     }
   });
 

@@ -40,6 +40,12 @@ describe('autoMap', () => {
     expect(fn).not.toBeNull();
   });
 
+  it('does not auto-map architectural framework rules just because they mention a tool', () => {
+    const rule = makeRule('Use Prisma for all data access', { category: 'tool-constraint' });
+    const fn = autoMap(rule);
+    expect(fn).toBeNull();
+  });
+
   it('returns null for unverifiable rules', () => {
     const rule = makeRule('be creative', { verifiability: 'unverifiable' });
     const fn = autoMap(rule);
@@ -78,6 +84,7 @@ describe('verifySession', () => {
     expect(results[0].method).toBe('auto:bash-keyword');
     expect(results[0].relevant).toBe(true);
     expect(results[0]).toHaveProperty('followed', true);
+    expect(results[0]).toHaveProperty('evidence');
   });
 
   it('handles mixed rule types in a single session', () => {

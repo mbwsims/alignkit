@@ -18,6 +18,7 @@ function serializeObservation(obs: Observation): SerializedObservation {
     followed: obs.relevant ? obs.followed : null,
     method: obs.method,
     confidence: obs.confidence,
+    evidence: obs.evidence,
   };
 }
 

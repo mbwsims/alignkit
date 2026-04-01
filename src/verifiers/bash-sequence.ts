@@ -77,6 +77,13 @@ function firstMatchTimestamp(
   return null;
 }
 
+function firstMatchingAction(
+  bashActions: { command: string; timestamp: string }[],
+  pattern: RegExp,
+): { command: string; timestamp: string } | null {
+  return bashActions.find((action) => pattern.test(action.command)) ?? null;
+}
+
 export function verifyBashSequence(
   rule: Rule,
   actions: AgentAction[],
@@ -92,19 +99,46 @@ export function verifyBashSequence(
   if (!firstPattern || !secondPattern) return { ...base, relevant: false };
 
   const bashes = bashActionsWithTime(actions);
-  const firstTime = firstMatchTimestamp(bashes, firstPattern);
-  const secondTime = firstMatchTimestamp(bashes, secondPattern);
+  const firstAction = firstMatchingAction(bashes, firstPattern);
+  const secondAction = firstMatchingAction(bashes, secondPattern);
+  const firstTime = firstAction?.timestamp ?? null;
+  const secondTime = secondAction?.timestamp ?? null;
 
   // Neither action present - not relevant
-  if (!firstTime && !secondTime) return { ...base, relevant: false };
+  if (!firstTime && !secondTime) {
+    return {
+      ...base,
+      relevant: false,
+      evidence: `No commands matched "${ordering.firstPhrase}" or "${ordering.secondPhrase}".`,
+    };
+  }
 
   // Only second present (e.g., committed without testing) - followed: false
-  if (!firstTime && secondTime) return { ...base, relevant: true, followed: false };
+  if (!firstTime && secondTime) {
+    return {
+      ...base,
+      relevant: true,
+      followed: false,
+      evidence: `Observed "${secondAction?.command}" without any earlier match for "${ordering.firstPhrase}".`,
+    };
+  }
 
   // Only first present - not enough info but relevant, followed: null
-  if (firstTime && !secondTime) return { ...base, relevant: true, followed: null };
+  if (firstTime && !secondTime) {
+    return {
+      ...base,
+      relevant: true,
+      followed: null,
+      evidence: `Observed "${firstAction?.command}" but no later match for "${ordering.secondPhrase}".`,
+    };
+  }
 
   // Both present - check ordering
   const followed = firstTime! <= secondTime!;
-  return { ...base, relevant: true, followed };
+  return {
+    ...base,
+    relevant: true,
+    followed,
+    evidence: `${firstAction?.command} @ ${firstTime} -> ${secondAction?.command} @ ${secondTime}`,
+  };
 }

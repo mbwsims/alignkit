@@ -27,6 +27,7 @@ describe('verifyBashKeyword', () => {
     const obs = verifyBashKeyword(rule, actions, 'sess-1');
     expect(obs.relevant).toBe(true);
     expect(obs).toHaveProperty('followed', true);
+    expect(obs.evidence).toContain('pnpm install');
   });
 
   it('"use pnpm not npm" + npm install => followed: false', () => {
@@ -35,6 +36,7 @@ describe('verifyBashKeyword', () => {
     const obs = verifyBashKeyword(rule, actions, 'sess-1');
     expect(obs.relevant).toBe(true);
     expect(obs).toHaveProperty('followed', false);
+    expect(obs.evidence).toContain('npm install');
   });
 
   it('"use pnpm not npm" + no package manager => relevant: false', () => {

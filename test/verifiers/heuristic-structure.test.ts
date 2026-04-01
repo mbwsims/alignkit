@@ -35,6 +35,7 @@ describe('verifyHeuristicStructure', () => {
       const obs = verifyHeuristicStructure(rule, actions, 'sess-1');
       expect(obs.relevant).toBe(true);
       expect(obs).toHaveProperty('followed', false);
+      expect(obs.evidence).toContain('src/utils.ts');
     });
 
     it('no code files => relevant: false', () => {
@@ -54,6 +55,7 @@ describe('verifyHeuristicStructure', () => {
       const obs = verifyHeuristicStructure(rule, actions, 'sess-1');
       expect(obs.relevant).toBe(true);
       expect(obs).toHaveProperty('followed', true);
+      expect(obs.evidence).toContain('src/api.ts');
     });
 
     it('no async keyword => followed: false', () => {
@@ -72,6 +74,7 @@ describe('verifyHeuristicStructure', () => {
       const obs = verifyHeuristicStructure(rule, actions, 'sess-1');
       expect(obs.relevant).toBe(true);
       expect(obs).toHaveProperty('followed', true);
+      expect(obs.evidence).toContain('tsconfig.json');
     });
   });
 

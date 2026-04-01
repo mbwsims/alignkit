@@ -23,6 +23,7 @@ export interface CheckToolResult {
     adherence: number | null;
     method: string;
     confidence: string;
+    evidence?: string;
   }>;
   unresolvedRules: Array<{
     text: string;
@@ -43,6 +44,7 @@ function serializeObservation(obs: Observation): SerializedObservation {
     followed: obs.relevant ? obs.followed : null,
     method: obs.method,
     confidence: obs.confidence,
+    evidence: obs.evidence,
   };
 }
 
@@ -146,6 +148,8 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
   const sessionActionsMap = new Map<string, { bashCommands: string[]; writtenFiles: string[]; editedFiles: string[] }>();
 
   for (const session of sessions) {
+    sessionActionsMap.set(session.sessionId, summarizeActions(session.actions));
+
     if (store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) {
       continue;
     }
@@ -161,9 +165,6 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
     };
 
     store.append(result);
-
-    // Store action summaries for later use
-    sessionActionsMap.set(session.sessionId, summarizeActions(session.actions));
   }
 
   // 7. Aggregate observations for current epoch
@@ -175,8 +176,10 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
     let followedCount = 0;
     let topConfidence = 'low';
     let topMethod = 'unmapped';
+    let topEvidence: string | undefined;
     let strongestIrrelevantMethod = 'unmapped';
     let strongestIrrelevantConfidence = 'low';
+    let strongestIrrelevantEvidence: string | undefined;
 
     const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
     const methodRank: Record<string, number> = {
@@ -207,6 +210,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
           ) {
             topConfidence = obs.confidence;
             topMethod = obs.method;
+            topEvidence = obs.evidence;
           }
         } else {
           const obsConfidence = confidenceRank[obs.confidence] ?? 0;
@@ -220,6 +224,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
           ) {
             strongestIrrelevantConfidence = obs.confidence;
             strongestIrrelevantMethod = obs.method;
+            strongestIrrelevantEvidence = obs.evidence;
           }
         }
       }
@@ -228,6 +233,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
     if (relevantCount === 0) {
       topConfidence = strongestIrrelevantConfidence;
       topMethod = strongestIrrelevantMethod;
+      topEvidence = strongestIrrelevantEvidence;
     }
 
     return {
@@ -238,6 +244,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
       adherence: relevantCount > 0 ? followedCount / relevantCount : null,
       method: topMethod,
       confidence: topConfidence,
+      evidence: topEvidence,
     };
   });
 

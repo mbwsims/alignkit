@@ -22,6 +22,7 @@ function serializeObservation(obs: Observation): SerializedObservation {
     followed: obs.relevant ? obs.followed : null,
     method: obs.method,
     confidence: obs.confidence,
+    evidence: obs.evidence,
   };
 }
 
@@ -69,6 +70,7 @@ interface RuleAdherence {
   adherence: number | null;
   topConfidence: string;
   topMethod: string;
+  topEvidence?: string;
 }
 
 function aggregateObservations(
@@ -80,6 +82,7 @@ function aggregateObservations(
     let followedCount = 0;
     let topConfidence = 'low';
     let topMethod = 'unmapped';
+    let topEvidence: string | undefined;
 
     const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
     const methodRank: Record<string, number> = {
@@ -93,6 +96,7 @@ function aggregateObservations(
     };
     let strongestIrrelevantMethod = 'unmapped';
     let strongestIrrelevantConfidence = 'low';
+    let strongestIrrelevantEvidence: string | undefined;
 
     for (const result of allResults) {
       for (const obs of result.observations) {
@@ -113,6 +117,7 @@ function aggregateObservations(
           ) {
             topConfidence = obs.confidence;
             topMethod = obs.method;
+            topEvidence = obs.evidence;
           }
         } else {
           const obsConfidence = confidenceRank[obs.confidence] ?? 0;
@@ -126,6 +131,7 @@ function aggregateObservations(
           ) {
             strongestIrrelevantConfidence = obs.confidence;
             strongestIrrelevantMethod = obs.method;
+            strongestIrrelevantEvidence = obs.evidence;
           }
         }
       }
@@ -134,6 +140,7 @@ function aggregateObservations(
     if (relevantCount === 0) {
       topConfidence = strongestIrrelevantConfidence;
       topMethod = strongestIrrelevantMethod;
+      topEvidence = strongestIrrelevantEvidence;
     }
 
     return {
@@ -144,6 +151,7 @@ function aggregateObservations(
       adherence: relevantCount > 0 ? followedCount / relevantCount : null,
       topConfidence,
       topMethod,
+      topEvidence,
     };
   });
 }
@@ -185,10 +193,11 @@ function formatTerminalOutput(
   lines.push(header);
   lines.push(' ' + '\u2500'.repeat(cols.rule + cols.sessions + cols.followed + cols.adherence + cols.confidence + cols.method));
 
-  let autoVerified = 0;
-  let llmVerified = 0;
+  let autoEvaluated = 0;
+  let llmEvaluated = 0;
   let unverifiable = 0;
   let needsCustom = 0;
+  let notExercised = 0;
 
   for (const item of adherenceData) {
     const ruleText =
@@ -204,6 +213,7 @@ function formatTerminalOutput(
     if (item.relevantCount === 0) {
       followedStr = '-';
       adherenceStr = '-';
+      notExercised++;
     } else {
       followedStr = `${item.followedCount}/${item.relevantCount}`;
       const pct = Math.round((item.adherence ?? 0) * 100);
@@ -211,16 +221,18 @@ function formatTerminalOutput(
       adherenceStr = `${pct}%${icon}`;
     }
 
-    if (item.topMethod === 'unmapped') {
+    if (item.relevantCount === 0) {
+      // not exercised in any relevant session; don't count this as verified/evaluated
+    } else if (item.topMethod === 'unmapped') {
       if (item.rule.verifiability === 'unverifiable') {
         unverifiable++;
       } else {
         needsCustom++;
       }
     } else if (item.topMethod === 'llm-judge') {
-      llmVerified++;
+      llmEvaluated++;
     } else {
-      autoVerified++;
+      autoEvaluated++;
     }
 
     lines.push(
@@ -237,10 +249,11 @@ function formatTerminalOutput(
   lines.push('');
 
   const summary: string[] = [];
-  if (autoVerified > 0) summary.push(`${autoVerified} rules auto-verified`);
-  if (llmVerified > 0) summary.push(`${llmVerified} rules LLM-verified`);
+  if (autoEvaluated > 0) summary.push(`${autoEvaluated} rules auto-evaluated`);
+  if (llmEvaluated > 0) summary.push(`${llmEvaluated} rules LLM-evaluated`);
   if (unverifiable > 0) summary.push(`${unverifiable} unverifiable`);
   if (needsCustom > 0) summary.push(`${needsCustom} needs custom check`);
+  if (notExercised > 0) summary.push(`${notExercised} not exercised`);
   if (summary.length > 0) {
     lines.push(' ' + summary.join(' \u00B7 '));
   }
@@ -267,6 +280,7 @@ function formatJsonOutput(
       adherence: item.adherence,
       confidence: item.topConfidence,
       method: item.topMethod,
+      evidence: item.topEvidence,
     })),
   });
 }
@@ -284,8 +298,8 @@ function formatMarkdownOutput(
   lines.push(`Last modified: ${formatTimeAgo(sinceDate)}`);
   lines.push(`Sessions analyzed: ${sessionCount}`);
   lines.push('');
-  lines.push('| Rule | Sessions | Followed | Adherence | Confidence | Method |');
-  lines.push('|------|----------|----------|-----------|------------|--------|');
+  lines.push('| Rule | Sessions | Followed | Adherence | Confidence | Method | Evidence |');
+  lines.push('|------|----------|----------|-----------|------------|--------|----------|');
 
   for (const item of adherenceData) {
     const ruleText = item.rule.text.length > 50
@@ -294,8 +308,11 @@ function formatMarkdownOutput(
     const sessionsStr = `${item.relevantCount}/${item.totalSessions}`;
     const followedStr = item.relevantCount === 0 ? '-' : `${item.followedCount}/${item.relevantCount}`;
     const adherenceStr = item.adherence !== null ? `${Math.round(item.adherence * 100)}%` : '-';
+    const evidence = item.topEvidence
+      ? item.topEvidence.replace(/\|/g, '\\|').slice(0, 80)
+      : '—';
 
-    lines.push(`| ${ruleText} | ${sessionsStr} | ${followedStr} | ${adherenceStr} | ${item.topConfidence} | ${item.topMethod} |`);
+    lines.push(`| ${ruleText} | ${sessionsStr} | ${followedStr} | ${adherenceStr} | ${item.topConfidence} | ${item.topMethod} | ${evidence} |`);
   }
 
   return lines.join('\n');

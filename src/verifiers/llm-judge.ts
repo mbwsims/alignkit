@@ -128,6 +128,7 @@ function mapToObservations(
         relevant: false as const,
         method: 'llm-judge' as const,
         confidence: 'medium' as const,
+        evidence: j.evidence,
       };
     }
 
@@ -138,6 +139,7 @@ function mapToObservations(
       followed: j.followed,
       method: 'llm-judge' as const,
       confidence: 'medium' as const,
+      evidence: j.evidence,
     };
   });
 }

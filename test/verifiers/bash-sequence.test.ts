@@ -30,6 +30,8 @@ describe('verifyBashSequence', () => {
     const obs = verifyBashSequence(rule, actions, 'sess-1');
     expect(obs.relevant).toBe(true);
     expect(obs).toHaveProperty('followed', true);
+    expect(obs.evidence).toContain('vitest run');
+    expect(obs.evidence).toContain('git commit');
   });
 
   it('"run tests before committing" + commit at T1, test at T2 => followed: false', () => {
