@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { ANALYSIS_VERSION } from '../../history/analysis-version.js';
 import { discoverInstructionFiles } from '../../parsers/auto-detect.js';
 import { HistoryStore } from '../../history/store.js';
 import type { SessionResult } from '../../history/types.js';
@@ -8,7 +9,7 @@ export interface StatusToolResult {
   adherence: number;
   sessionCount: number;
   trend: 'up' | 'down' | 'stable' | 'insufficient';
-  rules: { total: number; autoVerified: number; violated: number; new: number };
+  rules: { total: number; fullyFollowed: number; violated: number; new: number };
 }
 
 function sessionAdherence(result: SessionResult): number {
@@ -46,7 +47,7 @@ export function statusTool(cwd: string, file?: string): StatusToolResult {
         adherence: 0,
         sessionCount: 0,
         trend: 'insufficient',
-        rules: { total: 0, autoVerified: 0, violated: 0, new: 0 },
+        rules: { total: 0, fullyFollowed: 0, violated: 0, new: 0 },
       };
     }
     filePath = discovered[0].absolutePath;
@@ -59,7 +60,7 @@ export function statusTool(cwd: string, file?: string): StatusToolResult {
 
   // 3. Get current epoch sessions
   const rulesVersion = HistoryStore.computeRulesVersion(filePath);
-  const sessions = store.queryByEpoch(rulesVersion);
+  const sessions = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
   if (sessions.length === 0) {
     return {
@@ -67,7 +68,7 @@ export function statusTool(cwd: string, file?: string): StatusToolResult {
       adherence: 0,
       sessionCount: 0,
       trend: 'insufficient',
-      rules: { total: 0, autoVerified: 0, violated: 0, new: 0 },
+      rules: { total: 0, fullyFollowed: 0, violated: 0, new: 0 },
     };
   }
 
@@ -105,13 +106,13 @@ export function statusTool(cwd: string, file?: string): StatusToolResult {
   }
 
   const totalRules = ruleStats.size;
-  let autoVerified = 0;
+  let fullyFollowed = 0;
   let violated = 0;
   let newRules = 0;
 
   for (const [, stat] of ruleStats) {
     if (stat.relevant > 0 && stat.followed === stat.relevant) {
-      autoVerified++;
+      fullyFollowed++;
     }
     if (stat.relevant > 0 && stat.followed / stat.relevant < 0.2) {
       violated++;
@@ -126,6 +127,6 @@ export function statusTool(cwd: string, file?: string): StatusToolResult {
     adherence: Math.round(adherence * 100),
     sessionCount: sessions.length,
     trend,
-    rules: { total: totalRules, autoVerified, violated, new: newRules },
+    rules: { total: totalRules, fullyFollowed, violated, new: newRules },
   };
 }

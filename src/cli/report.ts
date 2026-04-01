@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import type { Command } from 'commander';
+import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
 import { HistoryStore } from '../history/store.js';
 import type { SessionResult } from '../history/types.js';
@@ -413,7 +414,7 @@ export function registerReportCommand(program: Command): void {
       const alignkitDir = path.join(cwd, '.alignkit');
       const store = new HistoryStore(alignkitDir);
       const rulesVersion = HistoryStore.computeRulesVersion(filePath);
-      const sessions = store.queryByEpoch(rulesVersion);
+      const sessions = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
       // 4. Compute report
       const data = computeReport(rules, sessions, days);

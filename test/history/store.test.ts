@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ANALYSIS_VERSION } from '../../src/history/analysis-version.js';
 import { HistoryStore } from '../../src/history/store.js';
 import type { SessionResult } from '../../src/history/types.js';
 
@@ -10,7 +11,7 @@ function makeResult(sessionId: string, overrides?: Partial<SessionResult>): Sess
     sessionId,
     timestamp: '2026-01-01T00:00:00Z',
     rulesVersion: 'abc123def456',
-    analysisVersion: '0.1.0',
+    analysisVersion: ANALYSIS_VERSION,
     observations: [
       {
         ruleId: 'rule-1',
@@ -103,6 +104,15 @@ describe('HistoryStore', () => {
       expect(store.hasSession('sess-exists')).toBe(true);
     });
 
+    it('treats the same session as distinct across rules versions', () => {
+      store.append(makeResult('sess-versioned', { rulesVersion: 'version-a' }));
+      store.append(makeResult('sess-versioned', { rulesVersion: 'version-b' }));
+
+      expect(store.hasSession('sess-versioned', 'version-a', ANALYSIS_VERSION)).toBe(true);
+      expect(store.hasSession('sess-versioned', 'version-b', ANALYSIS_VERSION)).toBe(true);
+      expect(store.readAll()).toHaveLength(2);
+    });
+
     it('does not duplicate on re-append', () => {
       store.append(makeResult('sess-dup'));
       store.append(makeResult('sess-dup'));
@@ -157,6 +167,15 @@ describe('HistoryStore', () => {
     it('returns empty array for unknown epoch', () => {
       store.append(makeResult('sess-1'));
       expect(store.queryByEpoch('nonexistent')).toEqual([]);
+    });
+
+    it('filters by analysisVersion when provided', () => {
+      store.append(makeResult('sess-current', { rulesVersion: 'version-1', analysisVersion: ANALYSIS_VERSION }));
+      store.append(makeResult('sess-old', { rulesVersion: 'version-1', analysisVersion: '0.1.0' }));
+
+      const currentResults = store.queryByEpoch('version-1', ANALYSIS_VERSION);
+      expect(currentResults).toHaveLength(1);
+      expect(currentResults[0].sessionId).toBe('sess-current');
     });
   });
 

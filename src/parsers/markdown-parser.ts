@@ -11,37 +11,29 @@ const CONDITIONAL_PREFIXES = /^(when|if|for|during)\b/i;
 // Minimum length for a rule to be meaningful (filters out fragments)
 const MIN_RULE_LENGTH = 15;
 
-// Patterns that mark text as normative (an instruction or constraint).
-// Includes imperative verbs AND declarative constraint patterns.
-const NORMATIVE_PATTERN = new RegExp(
-  [
-    // Imperative verbs (direct commands)
-    /\b(always|never|must|should|use|run|create|prefer|avoid|ensure|write|do not|don't|make sure|keep)\b/,
-    // Declarative constraints: "X for all Y", "no X except Y", "only X"
-    /\b(for all|no\s+\w+\s+(except|unless)|not\s+\w+\s+(except|unless)|only)\b/,
-    // Strong directives in caps (NEVER, ALWAYS, etc.)
-    /\b(NEVER|ALWAYS|MUST|REQUIRED|IMPORTANT)\b/,
-    // Process directives: "X separate from Y", "commit both X and Y"
-    /\b(separate from|commit both)\b/,
-    // Convention declarations: "TypeScript strict mode" (bare noun phrase under a conventions/rules heading)
-    // These are handled by section context below, not by this pattern.
-  ]
-    .map((r) => r.source)
-    .join('|'),
-  'i',
-);
+const DIRECTIVE_START_PATTERN =
+  /^(?:(?:IMPORTANT|CRITICAL|NOTE):\s*)?(?:always|never|must|should|use|run|create|prefer|avoid|ensure|write|keep|do not(?!\s+have\b)|don't(?!\s+have\b)|make sure)\b/i;
+
+const CONDITIONAL_DIRECTIVE_PATTERN =
+  /^(?:when|if|for|during)\b.{0,160}\b(?:always|never|must|should|use|run|create|prefer|avoid|ensure|write|keep|do not|don't|make sure)\b/i;
+
+const INLINE_CONSTRAINT_PATTERN =
+  /\b(?:use\s+\w+\s+(?:not|instead of)\s+\w+|prefer\s+\w+\s+over\s+\w+|separate from|commit both|for all|no\s+\w+\s+(?:except|unless)|not\s+\w+\s+(?:except|unless))\b/i;
+
+const EMPHATIC_DIRECTIVE_PATTERN =
+  /^(?:IMPORTANT|CRITICAL|NEVER|ALWAYS|MUST|REQUIRED|DO NOT|YOU MUST)\b/;
 
 // Patterns that indicate documentation/reference, not instructions.
 // These are filtered out even if they contain normative-looking words.
 const DOCUMENTATION_PATTERNS = [
-  // Bold-prefixed architecture descriptions: "**Framework:** Next.js 16"
-  /^\*\*\w[^*]*\*\*[:\s]/,
   // API route documentation: "`GET /health` — Health check"
   /^`(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+\//,
   // Command reference with em-dash description: "`pnpm dev` — Start dev server"
   /^`[^`]+`\s*[—–-]\s+\w/,
   // Bare file paths or directory descriptions
   /^`?[a-zA-Z_/.]+\/[a-zA-Z_/.]+`?\s*[—–-]/,
+  // Markdown tables
+  /^\|.+\|$/,
 ];
 
 interface RawRule {
@@ -53,20 +45,24 @@ interface RawRule {
 
 // Section headings that indicate their content is normative (rules/conventions)
 const NORMATIVE_SECTIONS =
-  /\b(conventions?|rules?|requirements?|constraints?|principles?|guidelines?|standards?|directives?|must|do not|important|style|practices?|policies?|workflow)\b/i;
+  /\b(conventions?|rules?|constraints?|principles?|guidelines?|standards?|directives?|must|do not|important|style|practices?|policies?|workflow)\b/i;
+
+function stripLeadingFormatting(text: string): string {
+  return text
+    .replace(/^(?:\*\*[^*]+\*\*[:\s-]*|`[^`]+`[:\s-]*)+/, '')
+    .trim();
+}
 
 /**
  * Determine if text is a normative instruction (vs documentation/reference).
  * Uses both text content and section context.
  */
 function isNormative(text: string, section: string | null = null): boolean {
+  const normalized = stripLeadingFormatting(text);
+
   // Filter out documentation patterns first — these are never rules
-  if (DOCUMENTATION_PATTERNS.some((p) => p.test(text))) {
+  if (DOCUMENTATION_PATTERNS.some((p) => p.test(text)) || DOCUMENTATION_PATTERNS.some((p) => p.test(normalized))) {
     return false;
-  }
-  // Explicit normative language in the text itself
-  if (NORMATIVE_PATTERN.test(text)) {
-    return true;
   }
   // Items under normative section headings are treated as rules
   // even without explicit imperative verbs (e.g., "TypeScript strict mode"
@@ -74,7 +70,13 @@ function isNormative(text: string, section: string | null = null): boolean {
   if (section && NORMATIVE_SECTIONS.test(section)) {
     return true;
   }
-  return false;
+
+  return (
+    DIRECTIVE_START_PATTERN.test(normalized) ||
+    CONDITIONAL_DIRECTIVE_PATTERN.test(normalized) ||
+    INLINE_CONSTRAINT_PATTERN.test(normalized) ||
+    EMPHATIC_DIRECTIVE_PATTERN.test(normalized)
+  );
 }
 
 /**
@@ -186,6 +188,12 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
 
     // Blank line — flush paragraph accumulator
     if (line.trim() === '') {
+      flushParagraph();
+      continue;
+    }
+
+    // Skip markdown tables and blockquotes
+    if (/^\|/.test(line) || /^>/.test(line)) {
       flushParagraph();
       continue;
     }

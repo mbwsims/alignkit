@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeReport, formatTerminalReport } from '../../src/cli/report.js';
+import { ANALYSIS_VERSION } from '../../src/history/analysis-version.js';
 import type { Rule } from '../../src/parsers/types.js';
 import type { SessionResult } from '../../src/history/types.js';
 
@@ -24,7 +25,7 @@ function makeSession(
     sessionId: id,
     timestamp,
     rulesVersion: 'abc123',
-    analysisVersion: '0.1.0',
+    analysisVersion: ANALYSIS_VERSION,
     observations: observations.map((o) => ({
       ruleId: o.ruleId,
       sessionId: id,

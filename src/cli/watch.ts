@@ -5,11 +5,10 @@ import type { Command } from 'commander';
 import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
+import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { HistoryStore } from '../history/store.js';
 import type { Observation } from '../verifiers/types.js';
 import type { SerializedObservation, SessionResult } from '../history/types.js';
-
-const ANALYSIS_VERSION = '0.1.0';
 
 function serializeObservation(obs: Observation): SerializedObservation {
   return {
@@ -177,7 +176,7 @@ export function registerWatchCommand(program: Command): void {
           const sessions = readSessions({ cwd, since });
 
           for (const session of sessions) {
-            if (store.hasSession(session.sessionId)) continue;
+            if (store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) continue;
 
             const observations = verifySession(rules, session.actions, session.sessionId);
             const result: SessionResult = {

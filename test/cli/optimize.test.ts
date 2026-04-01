@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeMaps, reconstructMarkdown } from '../../src/cli/optimize.js';
+import { ANALYSIS_VERSION } from '../../src/history/analysis-version.js';
 import { deduplicateRules } from '../../src/optimizer/deduplicator.js';
 import { reorderRules } from '../../src/optimizer/reorderer.js';
 import { flagRules } from '../../src/optimizer/flagger.js';
@@ -27,7 +28,7 @@ function makeSession(
     sessionId: id,
     timestamp,
     rulesVersion: 'abc123',
-    analysisVersion: '0.1.0',
+    analysisVersion: ANALYSIS_VERSION,
     observations: observations.map((o) => ({
       ruleId: o.ruleId,
       sessionId: id,

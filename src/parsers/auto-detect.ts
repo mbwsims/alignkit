@@ -15,9 +15,10 @@ const IGNORE_PATTERNS = ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/.
 
 const ROOT_PRIORITY: Record<string, number> = {
   'CLAUDE.md': 0,
-  '.cursorrules': 1,
-  'AGENTS.md': 2,
-  'rules': 3, // .cursor/rules
+  'CLAUDE.local.md': 1,
+  '.cursorrules': 2,
+  'AGENTS.md': 3,
+  'rules': 4, // legacy .cursor/rules file
 };
 
 function getRootPriority(relativePath: string): number {
@@ -27,7 +28,15 @@ function getRootPriority(relativePath: string): number {
 }
 
 export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
-  const patterns = ['**/CLAUDE.md', '**/AGENTS.md', '**/.cursorrules', '**/.cursor/rules'];
+  const patterns = [
+    '**/CLAUDE.md',
+    '**/CLAUDE.local.md',
+    '**/AGENTS.md',
+    '**/.cursorrules',
+    '**/.cursor/rules',
+    '**/.cursor/rules/**/*.md',
+    '**/.cursor/rules/**/*.mdc',
+  ];
 
   const found = globbySync(patterns, {
     cwd,
@@ -64,6 +73,7 @@ export function parseInstructionFile(content: string, filePath: string): Rule[] 
 
   switch (basename) {
     case 'CLAUDE.md':
+    case 'CLAUDE.local.md':
       return parseClaudeMd(content, filePath);
     case 'AGENTS.md':
       return parseAgentsMd(content, filePath);
@@ -71,6 +81,9 @@ export function parseInstructionFile(content: string, filePath: string): Rule[] 
     case 'rules':
       return parseCursorrules(content, filePath);
     default:
+      if (filePath.includes(`${path.sep}.cursor${path.sep}rules${path.sep}`) || basename.endsWith('.mdc')) {
+        return parseCursorrules(content, filePath);
+      }
       return parseClaudeMd(content, filePath);
   }
 }

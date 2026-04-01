@@ -42,9 +42,18 @@ export class HistoryStore {
   }
 
   /** Check if a session is already recorded. */
-  hasSession(sessionId: string): boolean {
+  hasSession(
+    sessionId: string,
+    rulesVersion?: string,
+    analysisVersion?: string,
+  ): boolean {
     const results = this.readAll();
-    return results.some((r) => r.sessionId === sessionId);
+    return results.some(
+      (r) =>
+        r.sessionId === sessionId &&
+        (rulesVersion === undefined || r.rulesVersion === rulesVersion) &&
+        (analysisVersion === undefined || r.analysisVersion === analysisVersion),
+    );
   }
 
   /** Append a session result (with dedup check and lockfile). */
@@ -54,7 +63,13 @@ export class HistoryStore {
 
     try {
       // Dedup check inside lock
-      if (this.hasSession(result.sessionId)) {
+      if (
+        this.hasSession(
+          result.sessionId,
+          result.rulesVersion,
+          result.analysisVersion,
+        )
+      ) {
         return;
       }
 
@@ -72,15 +87,30 @@ export class HistoryStore {
   }
 
   /** Remove a session from history (for --fresh re-analysis). */
-  removeSession(sessionId: string): void {
-    const results = this.readAll().filter((r) => r.sessionId !== sessionId);
+  removeSession(
+    sessionId: string,
+    rulesVersion?: string,
+    analysisVersion?: string,
+  ): void {
+    const results = this.readAll().filter(
+      (r) =>
+        !(
+          r.sessionId === sessionId &&
+          (rulesVersion === undefined || r.rulesVersion === rulesVersion) &&
+          (analysisVersion === undefined || r.analysisVersion === analysisVersion)
+        ),
+    );
     this.ensureDir();
     writeFileSync(this.historyPath, results.map((r) => JSON.stringify(r)).join('\n') + (results.length > 0 ? '\n' : ''), 'utf-8');
   }
 
   /** Get all sessions for a specific rules version (epoch). */
-  queryByEpoch(rulesVersion: string): SessionResult[] {
-    return this.readAll().filter((r) => r.rulesVersion === rulesVersion);
+  queryByEpoch(rulesVersion: string, analysisVersion?: string): SessionResult[] {
+    return this.readAll().filter(
+      (r) =>
+        r.rulesVersion === rulesVersion &&
+        (analysisVersion === undefined || r.analysisVersion === analysisVersion),
+    );
   }
 
   private ensureDir(): void {

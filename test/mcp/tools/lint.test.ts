@@ -136,8 +136,8 @@ describe('lintTool', () => {
     writeFileSync(
       join(tmpDir, 'CLAUDE.md'),
       [
-        '- Try to keep functions small',
-        '- Consider using TypeScript',
+        '- Use TypeScript when appropriate',
+        '- Always consider performance tradeoffs',
       ].join('\n'),
     );
 

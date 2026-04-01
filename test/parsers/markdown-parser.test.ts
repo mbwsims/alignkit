@@ -126,4 +126,34 @@ describe('parseMarkdown', () => {
       ).toBe(true);
     });
   });
+
+  describe('documentation-heavy markdown', () => {
+    it('does not treat README product copy and tables as rules', () => {
+      const content = `# Tool
+
+This tool helps you understand your rules.
+
+## What it does
+
+**\`lint\`** finds structural issues and suggests improvements.
+
+| Command | Description |
+|---|---|
+| \`alignkit lint\` | Analyze instructions |
+
+## Rules
+
+- Always run tests before committing.
+- Use pnpm, not npm.
+`;
+
+      const rules = parseMarkdown(content, 'README.md');
+      const texts = rules.map((r) => r.text);
+
+      expect(texts).toEqual([
+        'Always run tests before committing.',
+        'Use pnpm, not npm.',
+      ]);
+    });
+  });
 });

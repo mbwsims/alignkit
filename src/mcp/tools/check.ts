@@ -4,13 +4,12 @@ import path from 'node:path';
 import { discoverInstructionFiles, parseInstructionFile } from '../../parsers/auto-detect.js';
 import { readSessions } from '../../sessions/session-reader.js';
 import { verifySession } from '../../verifiers/verifier-engine.js';
+import { ANALYSIS_VERSION } from '../../history/analysis-version.js';
 import { HistoryStore } from '../../history/store.js';
 import type { Observation } from '../../verifiers/types.js';
 import type { SerializedObservation, SessionResult } from '../../history/types.js';
 import type { Rule } from '../../parsers/types.js';
 import type { AgentAction } from '../../sessions/types.js';
-
-const ANALYSIS_VERSION = '0.1.0';
 
 export interface CheckToolResult {
   file: string;
@@ -139,7 +138,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
   const sessionActionsMap = new Map<string, { bashCommands: string[]; writtenFiles: string[]; editedFiles: string[] }>();
 
   for (const session of sessions) {
-    if (store.hasSession(session.sessionId)) {
+    if (store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) {
       continue;
     }
 
@@ -160,7 +159,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
   }
 
   // 7. Aggregate observations for current epoch
-  const allResults = store.queryByEpoch(rulesVersion);
+  const allResults = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
   // 8. Build per-rule adherence
   const ruleResults = rules.map((rule) => {

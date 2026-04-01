@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync, rmSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { ANALYSIS_VERSION } from '../../../src/history/analysis-version.js';
 import { statusTool } from '../../../src/mcp/tools/status.js';
 import type { SessionResult } from '../../../src/history/types.js';
 
@@ -37,7 +38,7 @@ describe('statusTool', () => {
     expect(result.adherence).toBe(0);
     expect(result.sessionCount).toBe(0);
     expect(result.trend).toBe('insufficient');
-    expect(result.rules).toEqual({ total: 0, autoVerified: 0, violated: 0, new: 0 });
+    expect(result.rules).toEqual({ total: 0, fullyFollowed: 0, violated: 0, new: 0 });
   });
 
   it('returns empty state when no instruction files found', () => {
@@ -63,7 +64,7 @@ describe('statusTool', () => {
       sessionId: 'sess-1',
       timestamp: new Date(Date.now() - 86400000).toISOString(),
       rulesVersion,
-      analysisVersion: '0.1.0',
+      analysisVersion: ANALYSIS_VERSION,
       observations: [
         {
           ruleId: 'rule-1',
@@ -80,7 +81,7 @@ describe('statusTool', () => {
       sessionId: 'sess-2',
       timestamp: new Date(Date.now() - 43200000).toISOString(),
       rulesVersion,
-      analysisVersion: '0.1.0',
+      analysisVersion: ANALYSIS_VERSION,
       observations: [
         {
           ruleId: 'rule-1',
@@ -121,7 +122,7 @@ describe('statusTool', () => {
         sessionId: `sess-${i}`,
         timestamp: new Date(Date.now() - (4 - i) * 3600000).toISOString(),
         rulesVersion,
-        analysisVersion: '0.1.0',
+        analysisVersion: ANALYSIS_VERSION,
         observations: [
           {
             ruleId: 'rule-1',

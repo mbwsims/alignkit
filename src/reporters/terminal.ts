@@ -2,6 +2,7 @@ import pc from 'picocolors';
 import type { LintResult } from '../analyzers/types.js';
 import type { Reporter } from './types.js';
 import type { Rule } from '../parsers/types.js';
+import { autoMap } from '../verifiers/auto-mapper.js';
 
 const TRUNCATE_LEN = 60;
 
@@ -68,7 +69,7 @@ export class TerminalReporter implements Reporter {
     }
 
     // Compute stats for HEALTH
-    const auto = result.rules.filter((r: Rule) => r.verifiability === 'auto').length;
+    const auto = result.rules.filter((r: Rule) => autoMap(r) !== null).length;
     const vague = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'VAGUE').length;
     const conflicting = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT').length;
     const redundant = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'REDUNDANT').length;

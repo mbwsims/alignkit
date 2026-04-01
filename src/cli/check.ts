@@ -7,12 +7,11 @@ import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
 import { verifyWithLLM } from '../verifiers/llm-judge.js';
+import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { HistoryStore } from '../history/store.js';
 import type { Observation } from '../verifiers/types.js';
 import type { SerializedObservation, SessionResult } from '../history/types.js';
 import type { Rule } from '../parsers/types.js';
-
-const ANALYSIS_VERSION = '0.1.0';
 
 function serializeObservation(obs: Observation): SerializedObservation {
   return {
@@ -75,6 +74,14 @@ function aggregateObservations(
     let topMethod = 'unmapped';
 
     const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const methodRank: Record<string, number> = {
+      'auto:bash-keyword': 4,
+      'auto:file-pattern': 4,
+      'auto:bash-sequence': 3,
+      'auto:heuristic-structure': 3,
+      'llm-judge': 2,
+      unmapped: 1,
+    };
 
     for (const result of allResults) {
       for (const obs of result.observations) {
@@ -84,10 +91,18 @@ function aggregateObservations(
           if (obs.followed === true) {
             followedCount++;
           }
-          if ((confidenceRank[obs.confidence] ?? 0) > (confidenceRank[topConfidence] ?? 0)) {
+          const obsConfidence = confidenceRank[obs.confidence] ?? 0;
+          const topConfidenceValue = confidenceRank[topConfidence] ?? 0;
+          const obsMethodRank = methodRank[obs.method] ?? 0;
+          const topMethodRank = methodRank[topMethod] ?? 0;
+
+          if (
+            obsConfidence > topConfidenceValue ||
+            (obsConfidence === topConfidenceValue && obsMethodRank > topMethodRank)
+          ) {
             topConfidence = obs.confidence;
+            topMethod = obs.method;
           }
-          topMethod = obs.method;
         }
       }
     }
@@ -142,6 +157,7 @@ function formatTerminalOutput(
   lines.push(' ' + '\u2500'.repeat(cols.rule + cols.sessions + cols.followed + cols.adherence + cols.confidence + cols.method));
 
   let autoVerified = 0;
+  let llmVerified = 0;
   let unverifiable = 0;
   let needsCustom = 0;
 
@@ -172,6 +188,8 @@ function formatTerminalOutput(
       } else {
         needsCustom++;
       }
+    } else if (item.topMethod === 'llm-judge') {
+      llmVerified++;
     } else {
       autoVerified++;
     }
@@ -191,6 +209,7 @@ function formatTerminalOutput(
 
   const summary: string[] = [];
   if (autoVerified > 0) summary.push(`${autoVerified} rules auto-verified`);
+  if (llmVerified > 0) summary.push(`${llmVerified} rules LLM-verified`);
   if (unverifiable > 0) summary.push(`${unverifiable} unverifiable`);
   if (needsCustom > 0) summary.push(`${needsCustom} needs custom check`);
   if (summary.length > 0) {
@@ -312,13 +331,13 @@ export function registerCheckCommand(program: Command): void {
       let unresolvedRuleNames: string[] = [];
 
       for (const session of sessions) {
-        if (!options.fresh && store.hasSession(session.sessionId)) {
+        if (!options.fresh && store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) {
           continue;
         }
 
         // When --fresh, remove old entry before re-appending
-        if (options.fresh && store.hasSession(session.sessionId)) {
-          store.removeSession(session.sessionId);
+        if (options.fresh && store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) {
+          store.removeSession(session.sessionId, rulesVersion, ANALYSIS_VERSION);
         }
 
         let observations = verifySession(rules, session.actions, session.sessionId);
@@ -376,7 +395,7 @@ export function registerCheckCommand(program: Command): void {
       }
 
       // 8. Aggregate observations for current epoch
-      const allResults = store.queryByEpoch(rulesVersion);
+      const allResults = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
       const adherenceData = aggregateObservations(rules, allResults);
 
       // 9. Output results
