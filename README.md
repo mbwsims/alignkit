@@ -247,7 +247,7 @@ npx alignkit check --format json
 | AGENTS.md | — | Yes | Yes (Claude Code sessions) |
 | .cursorrules | — | Yes | Not yet |
 | .cursor/rules | — | Yes | Not yet |
-| .claude/skills/*.md | Coming soon | Coming soon | — |
+| .claude/skills/*/SKILL.md | — | Yes | — |
 
 ## Privacy
 

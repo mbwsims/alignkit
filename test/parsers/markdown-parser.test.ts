@@ -171,4 +171,39 @@ This tool helps you understand your rules.
       expect(texts).toContain('Before modifying production config, ask for confirmation.');
     });
   });
+
+  describe('parser hardening', () => {
+    it('preserves multi-line list items as a single rule', () => {
+      const content = [
+        '## Rules',
+        '',
+        '- Always run tests before committing,',
+        '  especially after changing migrations or generated files.',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+
+      expect(rules).toHaveLength(1);
+      expect(rules[0].text).toBe(
+        'Always run tests before committing, especially after changing migrations or generated files.',
+      );
+      expect(rules[0].source.lineStart).toBe(3);
+      expect(rules[0].source.lineEnd).toBe(4);
+    });
+
+    it('ignores checklist items and metadata labels inside normative sections', () => {
+      const content = [
+        '## Rules',
+        '',
+        '- [ ] Add CI checks',
+        '- **Framework:** Next.js 16',
+        '- TypeScript strict mode',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+      const texts = rules.map((rule) => rule.text);
+
+      expect(texts).toEqual(['TypeScript strict mode']);
+    });
+  });
 });

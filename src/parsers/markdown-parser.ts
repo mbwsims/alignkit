@@ -23,6 +23,11 @@ const INLINE_CONSTRAINT_PATTERN =
 const EMPHATIC_DIRECTIVE_PATTERN =
   /^(?:IMPORTANT|CRITICAL|NEVER|ALWAYS|MUST|REQUIRED|DO NOT|YOU MUST)\b/;
 
+const CHECKLIST_PATTERN = /^\[[ xX]\]\s+/;
+const LIST_CONTINUATION_PATTERN = /^(?:\s{2,}|\t+)\S/;
+const METADATA_LABEL_PATTERN =
+  /^(?:\*\*)?(?:framework|database|auth|ai|styling|language|runtime|package manager|current phase|phase|status|owner|repository|repo|branch|file abstraction|file abstraction layer|agents?)\b[^:]{0,20}:(?:\*\*)?\s+\S/i;
+
 // Patterns that indicate documentation/reference, not instructions.
 // These are filtered out even if they contain normative-looking words.
 const DOCUMENTATION_PATTERNS = [
@@ -34,6 +39,10 @@ const DOCUMENTATION_PATTERNS = [
   /^`?[a-zA-Z_/.]+\/[a-zA-Z_/.]+`?\s*[—–-]/,
   // Markdown tables
   /^\|.+\|$/,
+  // Checklist items are usually TODOs, not stable instructions
+  CHECKLIST_PATTERN,
+  // Metadata label/value bullets like "Framework: Next.js"
+  METADATA_LABEL_PATTERN,
 ];
 
 interface RawRule {
@@ -51,6 +60,17 @@ function stripLeadingFormatting(text: string): string {
   return text
     .replace(/^(?:\*\*[^*]+\*\*[:\s-]*|`[^`]+`[:\s-]*)+/, '')
     .trim();
+}
+
+function isListContinuationLine(line: string): boolean {
+  return LIST_CONTINUATION_PATTERN.test(line) && !/^[-*]\s+/.test(line) && !/^\d+\.\s+/.test(line);
+}
+
+interface ActiveListItem {
+  textParts: string[];
+  section: string | null;
+  lineStart: number;
+  lineEnd: number;
 }
 
 /**
@@ -118,6 +138,7 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
   let currentSection: string | null = null;
   let inCodeFence = false;
   let paragraphLines: Array<{ text: string; lineNum: number }> = [];
+  let activeListItem: ActiveListItem | null = null;
 
   function flushParagraph(): void {
     if (paragraphLines.length === 0) return;
@@ -140,6 +161,25 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
     }
   }
 
+  function flushActiveListItem(): void {
+    if (!activeListItem) return;
+
+    const text = activeListItem.textParts.join(' ').trim();
+    const { section, lineStart, lineEnd } = activeListItem;
+    activeListItem = null;
+
+    if (text.length < MIN_RULE_LENGTH) return;
+
+    if (isNormativeText(text, section)) {
+      rawRules.push({
+        text,
+        section,
+        lineStart,
+        lineEnd,
+      });
+    }
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const lineNum = i + 1; // 1-based
     const line = lines[i];
@@ -148,6 +188,7 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
     if (/^```/.test(line)) {
       if (!inCodeFence) {
         // Entering a code fence — flush any pending paragraph first
+        flushActiveListItem();
         flushParagraph();
       }
       inCodeFence = !inCodeFence;
@@ -162,6 +203,7 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
     // Heading match
     const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
     if (headingMatch) {
+      flushActiveListItem();
       flushParagraph();
       currentSection = headingMatch[1].trim();
       continue;
@@ -170,39 +212,48 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
     // List item match (unordered: - or *, ordered: 1.)
     const listMatch = line.match(/^[-*]\s+(.+)$/) ?? line.match(/^\d+\.\s+(.+)$/);
     if (listMatch) {
+      flushActiveListItem();
       flushParagraph();
       const itemText = listMatch[1].trim();
-      // Only add list items that contain normative language.
-      // This filters out documentation items like "**Framework:** Next.js 16"
-      // and command references like "`pnpm dev` — Start dev server".
-      if (itemText.length >= MIN_RULE_LENGTH && isNormativeText(itemText, currentSection)) {
-        rawRules.push({
-          text: itemText,
+      if (!CHECKLIST_PATTERN.test(itemText)) {
+        activeListItem = {
+          textParts: [itemText],
           section: currentSection,
           lineStart: lineNum,
           lineEnd: lineNum,
-        });
+        };
       }
       continue;
     }
 
     // Blank line — flush paragraph accumulator
     if (line.trim() === '') {
+      flushActiveListItem();
       flushParagraph();
       continue;
     }
 
     // Skip markdown tables and blockquotes
     if (/^\|/.test(line) || /^>/.test(line)) {
+      flushActiveListItem();
       flushParagraph();
       continue;
     }
+
+    if (activeListItem && isListContinuationLine(line)) {
+      activeListItem.textParts.push(line.trim());
+      activeListItem.lineEnd = lineNum;
+      continue;
+    }
+
+    flushActiveListItem();
 
     // Regular line — accumulate into paragraph
     paragraphLines.push({ text: line.trim(), lineNum });
   }
 
   // Flush any remaining paragraph at EOF
+  flushActiveListItem();
   flushParagraph();
 
   // Expand compound rules

@@ -1,6 +1,10 @@
 import path from 'node:path';
 import type { Diagnostic, PlacementSuggestion, Rule } from '../parsers/types.js';
-import { isClaudeAgentFilePath, normalizeInstructionPath } from '../parsers/instruction-paths.js';
+import {
+  isClaudeAgentFilePath,
+  isClaudeSkillFilePath,
+  normalizeInstructionPath,
+} from '../parsers/instruction-paths.js';
 
 interface HookSuggestion {
   event: string;
@@ -122,7 +126,7 @@ function suggestScopedRule(rule: Rule, cwd?: string): ScopedRuleSuggestion | nul
 }
 
 function suggestHook(rule: Rule): HookSuggestion | null {
-  if (rule.applicability) {
+  if (rule.applicability || isClaudeSkillFilePath(rule.source.file)) {
     return null;
   }
 
@@ -150,7 +154,12 @@ function countSequenceMarkers(text: string): number {
 }
 
 function suggestSubagent(rule: Rule): SubagentSuggestion | null {
-  if (rule.applicability || rule.text.length < 90 || isClaudeAgentFilePath(rule.source.file)) {
+  if (
+    rule.applicability
+    || rule.text.length < 90
+    || isClaudeAgentFilePath(rule.source.file)
+    || isClaudeSkillFilePath(rule.source.file)
+  ) {
     return null;
   }
 

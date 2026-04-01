@@ -10,7 +10,7 @@ import { flagVersions } from '../analyzers/version-flagger.js';
 import { analyzeOrdering } from '../analyzers/ordering-analyzer.js';
 import { detectLinterRules } from '../analyzers/linter-rule-detector.js';
 import { advisePlacement } from '../analyzers/placement-advisor.js';
-import { validateAgentFrontmatter } from '../analyzers/agent-frontmatter-validator.js';
+import { validateInstructionMetadata } from '../analyzers/instruction-metadata-validator.js';
 import { detectWeakEmphasis } from '../analyzers/emphasis-detector.js';
 import { analyzeTokens } from '../analyzers/token-counter.js';
 import { analyzeDeep } from '../analyzers/deep-analyzer.js';
@@ -66,7 +66,7 @@ export function registerLintCommand(program: Command): void {
 
       for (const filePath of filesToAnalyze) {
         let rules = loadEffectiveInstructionGraph(filePath, cwd).rules;
-        const fileDiagnostics = validateAgentFrontmatter(filePath, rules);
+        const fileDiagnostics = validateInstructionMetadata(filePath, rules);
 
         // Run all analyzers in sequence
         rules = detectVague(rules);

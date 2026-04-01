@@ -21,6 +21,11 @@ export function isClaudeAgentFilePath(filePath: string): boolean {
   return normalizeInstructionPath(filePath).includes('/.claude/agents/');
 }
 
+export function isClaudeSkillFilePath(filePath: string): boolean {
+  return normalizeInstructionPath(filePath).includes('/.claude/skills/')
+    && path.basename(filePath) === 'SKILL.md';
+}
+
 export function resolveRulesBaseDir(
   filePath: string,
   kind: 'cursor' | 'claude',

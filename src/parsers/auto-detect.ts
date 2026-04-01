@@ -4,12 +4,14 @@ import type { Rule } from './types.js';
 import { parseClaudeMd } from './claude-md.js';
 import { parseClaudeRules } from './claude-rules.js';
 import { parseClaudeAgent } from './claude-agent.js';
+import { parseClaudeSkill } from './claude-skill.js';
 import { parseAgentsMd } from './agents-md.js';
 import { parseCursorrules } from './cursorrules.js';
 import {
   isClaudeAgentFilePath,
   isClaudeMemoryFilePath,
   isClaudeRulesFilePath,
+  isClaudeSkillFilePath,
   isCursorRulesFilePath,
 } from './instruction-paths.js';
 
@@ -42,6 +44,7 @@ export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
     '**/.claude/rules/**/*.md',
     '**/.claude/rules/**/*.mdc',
     '**/.claude/agents/**/*.md',
+    '**/.claude/skills/**/SKILL.md',
     '**/AGENTS.md',
     '**/.cursorrules',
     '**/.cursor/rules',
@@ -81,7 +84,7 @@ export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
 
 function filterDiscoveredTargets(
   discovered: DiscoveredFile[],
-  options: { includeAgentFiles?: boolean } = {},
+  options: { includeAgentFiles?: boolean; includeSkillFiles?: boolean } = {},
 ): DiscoveredFile[] {
   const primaryClaudeFileByDir = new Map<string, string>();
   const hasClaudeMemoryTargets = discovered.some((file) => isClaudeMemoryFilePath(file.absolutePath));
@@ -104,6 +107,9 @@ function filterDiscoveredTargets(
     if (isClaudeAgentFilePath(file.absolutePath)) {
       return options.includeAgentFiles ?? false;
     }
+    if (isClaudeSkillFilePath(file.absolutePath)) {
+      return options.includeSkillFiles ?? false;
+    }
     if (hasClaudeMemoryTargets && isClaudeRulesFilePath(file.absolutePath)) {
       return false;
     }
@@ -120,6 +126,7 @@ export function discoverInstructionTargets(cwd: string): DiscoveredFile[] {
 export function discoverLintTargets(cwd: string): DiscoveredFile[] {
   return filterDiscoveredTargets(discoverInstructionFiles(cwd), {
     includeAgentFiles: true,
+    includeSkillFiles: true,
   });
 }
 
@@ -138,6 +145,9 @@ export function parseInstructionFile(content: string, filePath: string, cwd?: st
     default:
       if (isClaudeAgentFilePath(filePath)) {
         return parseClaudeAgent(content, filePath);
+      }
+      if (isClaudeSkillFilePath(filePath)) {
+        return parseClaudeSkill(content, filePath);
       }
       if (isClaudeRulesFilePath(filePath)) {
         return parseClaudeRules(content, filePath, cwd);

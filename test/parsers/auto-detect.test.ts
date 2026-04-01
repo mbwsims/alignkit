@@ -43,6 +43,16 @@ tools:
 
 You are an expert in test automation. Focus on running the smallest relevant test coverage first. When you see code changes, run the relevant tests. If tests fail, analyze failures and fix them while preserving intent.
 `;
+const CLAUDE_SKILL_CONTENT = `---
+name: explain-code
+description: Explain code with diagrams and analogies.
+---
+
+When explaining code:
+1. Start with an analogy.
+2. Draw a simple diagram.
+3. Walk through the code path.
+`;
 
 describe('discoverInstructionFiles', () => {
   let tmpDir: string;
@@ -119,6 +129,13 @@ describe('discoverInstructionFiles', () => {
     expect(files[0].relativePath).toBe('.claude/agents/test-runner.md');
   });
 
+  it('finds .claude/skills/*/SKILL.md files', () => {
+    writeFile(tmpDir, '.claude/skills/explain-code/SKILL.md', CLAUDE_SKILL_CONTENT);
+    const files = discoverInstructionFiles(tmpDir);
+    expect(files).toHaveLength(1);
+    expect(files[0].relativePath).toBe('.claude/skills/explain-code/SKILL.md');
+  });
+
   it('returns primary file first by priority when both CLAUDE.md and .cursorrules exist', () => {
     writeFile(tmpDir, 'CLAUDE.md', CLAUDE_MD_CONTENT);
     writeFile(tmpDir, '.cursorrules', CURSORRULES_CONTENT);
@@ -177,12 +194,17 @@ describe('discoverInstructionTargets', () => {
   it('keeps subagent files out of default operational targets but includes them for lint', () => {
     writeFile(tmpDir, 'CLAUDE.md', CLAUDE_MD_CONTENT);
     writeFile(tmpDir, '.claude/agents/test-runner.md', CLAUDE_AGENT_CONTENT);
+    writeFile(tmpDir, '.claude/skills/explain-code/SKILL.md', CLAUDE_SKILL_CONTENT);
 
     const targets = discoverInstructionTargets(tmpDir).map((file) => file.relativePath);
     const lintTargets = discoverLintTargets(tmpDir).map((file) => file.relativePath);
 
     expect(targets).toEqual(['CLAUDE.md']);
-    expect(lintTargets).toEqual(['CLAUDE.md', '.claude/agents/test-runner.md']);
+    expect(lintTargets).toEqual([
+      'CLAUDE.md',
+      '.claude/agents/test-runner.md',
+      '.claude/skills/explain-code/SKILL.md',
+    ]);
   });
 });
 
@@ -258,6 +280,19 @@ describe('parseInstructionFile', () => {
       'If tests fail, analyze failures and fix them while preserving intent.',
     );
     expect(texts.some((text) => text.includes('name: test-runner'))).toBe(false);
+  });
+
+  it('parses .claude/skills SKILL.md content and strips frontmatter', () => {
+    const rules = parseInstructionFile(
+      CLAUDE_SKILL_CONTENT,
+      '/project/.claude/skills/explain-code/SKILL.md',
+    );
+    const texts = rules.map((rule) => rule.text);
+
+    expect(texts).toContain('Start with an analogy.');
+    expect(texts).toContain('Draw a simple diagram.');
+    expect(texts).toContain('Walk through the code path.');
+    expect(texts.some((text) => text.includes('name: explain-code'))).toBe(false);
   });
 
   it('falls back to parseClaudeMd for unknown filenames', () => {

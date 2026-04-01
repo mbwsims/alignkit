@@ -8,7 +8,7 @@ import { flagVersions } from '../../analyzers/version-flagger.js';
 import { analyzeOrdering } from '../../analyzers/ordering-analyzer.js';
 import { detectLinterRules } from '../../analyzers/linter-rule-detector.js';
 import { advisePlacement } from '../../analyzers/placement-advisor.js';
-import { validateAgentFrontmatter } from '../../analyzers/agent-frontmatter-validator.js';
+import { validateInstructionMetadata } from '../../analyzers/instruction-metadata-validator.js';
 import { analyzeTokens } from '../../analyzers/token-counter.js';
 import { collectProjectContext } from '../../analyzers/project-context.js';
 import type { TokenAnalysis } from '../../analyzers/types.js';
@@ -57,7 +57,7 @@ function computeQuickWins(
   const metadataCount = fileDiagnostics.filter((diagnostic) => diagnostic.code === 'METADATA').length;
   if (metadataCount > 0) {
     wins.push(
-      `Fix ${metadataCount} subagent metadata issue${metadataCount > 1 ? 's' : ''} before relying on this file.`,
+      `Fix ${metadataCount} instruction metadata issue${metadataCount > 1 ? 's' : ''} before relying on this file.`,
     );
   }
 
@@ -160,7 +160,7 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
 
   // 2. Parse into rules
   let rules = loadEffectiveInstructionGraph(filePath, cwd).rules;
-  const fileDiagnostics = validateAgentFrontmatter(filePath, rules);
+  const fileDiagnostics = validateInstructionMetadata(filePath, rules);
 
   // 3. Run all static analyzers
   rules = detectVague(rules);

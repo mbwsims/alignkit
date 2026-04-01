@@ -111,6 +111,30 @@ describe('lintTool', () => {
     expect(result.rules.some((rule) => rule.text.includes('Focus on running'))).toBe(true);
   });
 
+  it('auto-discovers .claude/skills files when no runtime memory file exists', () => {
+    const skillDir = join(tmpDir, '.claude', 'skills', 'explain-code');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: explain-code',
+        'description: Explain code with analogies and diagrams.',
+        '---',
+        '',
+        'When explaining code:',
+        '1. Start with an analogy.',
+        '2. Draw a simple diagram.',
+      ].join('\n'),
+    );
+
+    const result = lintTool(tmpDir);
+
+    expect(result.file).toBe(join('.claude', 'skills', 'explain-code', 'SKILL.md'));
+    expect(result.ruleCount).toBeGreaterThan(0);
+    expect(result.rules.some((rule) => rule.text.includes('Start with an analogy'))).toBe(true);
+  });
+
   it('uses explicit file path when provided', () => {
     const subDir = join(tmpDir, 'sub');
     mkdirSync(subDir, { recursive: true });
@@ -143,6 +167,23 @@ describe('lintTool', () => {
 
     expect(result.fileDiagnostics.some((diagnostic) => diagnostic.code === 'METADATA')).toBe(true);
     expect(result.fileDiagnostics.some((diagnostic) => diagnostic.message.includes('description'))).toBe(true);
+    expect(result.quickWins.some((win) => win.includes('metadata'))).toBe(true);
+  });
+
+  it('surfaces skill metadata diagnostics separately from rules', () => {
+    const skillDir = join(tmpDir, '.claude', 'skills', 'ExplainCode');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      [
+        'Always explain code with diagrams and analogies.',
+      ].join('\n'),
+    );
+
+    const result = lintTool(tmpDir, join('.claude', 'skills', 'ExplainCode', 'SKILL.md'));
+
+    expect(result.fileDiagnostics.some((diagnostic) => diagnostic.code === 'METADATA')).toBe(true);
+    expect(result.fileDiagnostics.some((diagnostic) => diagnostic.message.includes('YAML frontmatter'))).toBe(true);
     expect(result.quickWins.some((win) => win.includes('metadata'))).toBe(true);
   });
 

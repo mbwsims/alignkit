@@ -82,6 +82,27 @@ describe('advisePlacement', () => {
     expect(result.diagnostics.some((d) => d.code === 'PLACEMENT')).toBe(false);
   });
 
+  it('does not recommend hooks or subagents for rules already defined inside skills', () => {
+    const [result] = advisePlacement(
+      [
+        makeRule(
+          'When debugging production issues, first capture logs, then isolate a minimal reproduction, then write a failing test, then apply the smallest safe fix.',
+          {
+            source: {
+              file: '/repo/.claude/skills/debug-workflow/SKILL.md',
+              lineStart: 8,
+              lineEnd: 8,
+              section: null,
+            },
+          },
+        ),
+      ],
+      '/repo',
+    );
+
+    expect(result.diagnostics.some((d) => d.code === 'PLACEMENT')).toBe(false);
+  });
+
   it('does not recommend scoped rules for already scoped instructions', () => {
     const [result] = advisePlacement(
       [

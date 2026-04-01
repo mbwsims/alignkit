@@ -13,14 +13,13 @@ interface RawRule {
 
 const MIN_RULE_LENGTH = 15;
 const SENTENCE_BOUNDARY = /(?<=[.!?])\s+(?=[A-Z])/;
-const AGENT_INTRO_PATTERN = /^(?:you are|this agent(?: is)?|act as)\b/i;
 const CHECKLIST_PATTERN = /^\[[ xX]\]\s+/;
 const LIST_CONTINUATION_PATTERN = /^(?:\s{2,}|\t+)\S/;
-const AGENT_DIRECTIVE_PATTERN =
-  /^(?:(?:when|if|whenever|before|after)\b.{0,200}\b(?:run|review|analyze|investigate|fix|use|delegate|escalate|ask|look for|check|write|preserve|keep|prefer|avoid|ensure|verify|focus on|pay attention|pay special attention)\b|(?:focus on|pay attention to|pay special attention to|look for|review|analyze|investigate|verify|preserve|keep|prefer|avoid|ensure|escalate|delegate|run|check|write|fix)\b)/i;
+const SKILL_DIRECTIVE_PATTERN =
+  /^(?:(?:when|if|whenever|before|after|to)\b.{0,200}\b(?:run|build|deploy|push|pull|open|start|stop|restart|generate|create|update|edit|review|analyze|inspect|verify|check|explain|document|summarize|walk through|draw|capture|isolate|write|fix|use|prefer|avoid|ensure|keep|preserve|return|include)\b|(?:run|build|deploy|push|pull|open|start|stop|restart|generate|create|update|edit|review|analyze|inspect|verify|check|explain|document|summarize|walk through|draw|capture|isolate|write|fix|use|prefer|avoid|ensure|keep|preserve|return|include|start with)\b)/i;
 
-function isAgentDirective(text: string, section: string | null): boolean {
-  return isNormativeText(text, section) || AGENT_DIRECTIVE_PATTERN.test(text.trim());
+function isSkillDirective(text: string, section: string | null): boolean {
+  return isNormativeText(text, section) || SKILL_DIRECTIVE_PATTERN.test(text.trim());
 }
 
 function isListContinuationLine(line: string): boolean {
@@ -43,19 +42,18 @@ function splitIntoCandidateRules(raw: RawRule): RawRule[] {
   const sentences = normalized
     .split(SENTENCE_BOUNDARY)
     .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length >= MIN_RULE_LENGTH)
-    .filter((sentence, index) => !(index === 0 && AGENT_INTRO_PATTERN.test(sentence)));
+    .filter((sentence) => sentence.length >= MIN_RULE_LENGTH);
 
   const candidates = sentences.length > 1 ? sentences : [normalized];
   const extracted: RawRule[] = [];
 
   for (const candidate of candidates) {
-    if (!isAgentDirective(candidate, raw.section)) {
+    if (!isSkillDirective(candidate, raw.section)) {
       continue;
     }
 
     for (const part of splitCompoundRule(candidate)) {
-      if (!isAgentDirective(part, raw.section)) {
+      if (!isSkillDirective(part, raw.section)) {
         continue;
       }
 
@@ -71,7 +69,7 @@ function splitIntoCandidateRules(raw: RawRule): RawRule[] {
   return extracted;
 }
 
-export function parseClaudeAgent(content: string, filePath: string): Rule[] {
+export function parseClaudeSkill(content: string, filePath: string): Rule[] {
   const { bodyPreservingLines } = extractInstructionFrontmatter(content);
   const lines = bodyPreservingLines.split('\n');
   const rawRules: RawRule[] = [];
