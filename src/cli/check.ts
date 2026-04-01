@@ -8,11 +8,11 @@ import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js'
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
 import { verifyWithLLM } from '../verifiers/llm-judge.js';
+import { aggregateAdherence } from '../check/adherence.js';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { HistoryStore } from '../history/store.js';
 import type { Observation } from '../verifiers/types.js';
 import type { SerializedObservation, SessionResult } from '../history/types.js';
-import type { Rule } from '../parsers/types.js';
 
 function serializeObservation(obs: Observation): SerializedObservation {
   return {
@@ -62,105 +62,11 @@ function formatTimeAgo(date: Date): string {
   return `${days} days ago`;
 }
 
-interface RuleAdherence {
-  rule: Rule;
-  relevantCount: number;
-  totalSessions: number;
-  followedCount: number;
-  adherence: number | null;
-  topConfidence: string;
-  topMethod: string;
-  topEvidence?: string;
-}
-
-function aggregateObservations(
-  rules: Rule[],
-  allResults: SessionResult[],
-): RuleAdherence[] {
-  return rules.map((rule) => {
-    let relevantCount = 0;
-    let followedCount = 0;
-    let topConfidence = 'low';
-    let topMethod = 'unmapped';
-    let topEvidence: string | undefined;
-
-    const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
-    const methodRank: Record<string, number> = {
-      'auto:bash-keyword': 4,
-      'auto:file-pattern': 4,
-      'auto:bash-sequence': 3,
-      'auto:heuristic-structure': 3,
-      'scope:filtered': 2,
-      'llm-judge': 2,
-      unmapped: 1,
-    };
-    let strongestIrrelevantMethod = 'unmapped';
-    let strongestIrrelevantConfidence = 'low';
-    let strongestIrrelevantEvidence: string | undefined;
-
-    for (const result of allResults) {
-      for (const obs of result.observations) {
-        if (obs.ruleId !== rule.id) continue;
-        if (obs.relevant) {
-          relevantCount++;
-          if (obs.followed === true) {
-            followedCount++;
-          }
-          const obsConfidence = confidenceRank[obs.confidence] ?? 0;
-          const topConfidenceValue = confidenceRank[topConfidence] ?? 0;
-          const obsMethodRank = methodRank[obs.method] ?? 0;
-          const topMethodRank = methodRank[topMethod] ?? 0;
-
-          if (
-            obsConfidence > topConfidenceValue ||
-            (obsConfidence === topConfidenceValue && obsMethodRank > topMethodRank)
-          ) {
-            topConfidence = obs.confidence;
-            topMethod = obs.method;
-            topEvidence = obs.evidence;
-          }
-        } else {
-          const obsConfidence = confidenceRank[obs.confidence] ?? 0;
-          const strongestConfidenceValue = confidenceRank[strongestIrrelevantConfidence] ?? 0;
-          const obsMethodRank = methodRank[obs.method] ?? 0;
-          const strongestMethodRank = methodRank[strongestIrrelevantMethod] ?? 0;
-
-          if (
-            obsConfidence > strongestConfidenceValue ||
-            (obsConfidence === strongestConfidenceValue && obsMethodRank > strongestMethodRank)
-          ) {
-            strongestIrrelevantConfidence = obs.confidence;
-            strongestIrrelevantMethod = obs.method;
-            strongestIrrelevantEvidence = obs.evidence;
-          }
-        }
-      }
-    }
-
-    if (relevantCount === 0) {
-      topConfidence = strongestIrrelevantConfidence;
-      topMethod = strongestIrrelevantMethod;
-      topEvidence = strongestIrrelevantEvidence;
-    }
-
-    return {
-      rule,
-      relevantCount,
-      totalSessions: allResults.length,
-      followedCount,
-      adherence: relevantCount > 0 ? followedCount / relevantCount : null,
-      topConfidence,
-      topMethod,
-      topEvidence,
-    };
-  });
-}
-
 function formatTerminalOutput(
   filePath: string,
   sinceDate: Date,
   sessionCount: number,
-  adherenceData: RuleAdherence[],
+  adherenceData: ReturnType<typeof aggregateAdherence>,
 ): string {
   const lines: string[] = [];
 
@@ -173,8 +79,9 @@ function formatTerminalOutput(
 
   // Table header
   const cols = {
-    rule: 40,
+    rule: 34,
     sessions: 10,
+    resolved: 10,
     followed: 10,
     adherence: 11,
     confidence: 12,
@@ -185,19 +92,21 @@ function formatTerminalOutput(
     ' ' +
     'Rule'.padEnd(cols.rule) +
     'Sessions'.padEnd(cols.sessions) +
+    'Resolved'.padEnd(cols.resolved) +
     'Followed'.padEnd(cols.followed) +
     'Adherence'.padEnd(cols.adherence) +
     'Confidence'.padEnd(cols.confidence) +
     'Method';
 
   lines.push(header);
-  lines.push(' ' + '\u2500'.repeat(cols.rule + cols.sessions + cols.followed + cols.adherence + cols.confidence + cols.method));
+  lines.push(' ' + '\u2500'.repeat(cols.rule + cols.sessions + cols.resolved + cols.followed + cols.adherence + cols.confidence + cols.method));
 
   let autoEvaluated = 0;
   let llmEvaluated = 0;
   let unverifiable = 0;
   let needsCustom = 0;
   let notExercised = 0;
+  let inconclusive = 0;
 
   for (const item of adherenceData) {
     const ruleText =
@@ -206,6 +115,7 @@ function formatTerminalOutput(
         : '"' + item.rule.text + '"';
 
     const sessionsStr = `${item.relevantCount}/${item.totalSessions}`;
+    const resolvedStr = item.relevantCount === 0 ? '-' : `${item.resolvedCount}/${item.relevantCount}`;
 
     let followedStr: string;
     let adherenceStr: string;
@@ -214,8 +124,12 @@ function formatTerminalOutput(
       followedStr = '-';
       adherenceStr = '-';
       notExercised++;
+    } else if (item.resolvedCount === 0) {
+      followedStr = '-';
+      adherenceStr = '?';
+      inconclusive++;
     } else {
-      followedStr = `${item.followedCount}/${item.relevantCount}`;
+      followedStr = `${item.followedCount}/${item.resolvedCount}`;
       const pct = Math.round((item.adherence ?? 0) * 100);
       const icon = pct === 100 ? pc.green(' \u2713') : pct >= 80 ? pc.yellow(' ~') : pc.red(' \u2717');
       adherenceStr = `${pct}%${icon}`;
@@ -223,13 +137,15 @@ function formatTerminalOutput(
 
     if (item.relevantCount === 0) {
       // not exercised in any relevant session; don't count this as verified/evaluated
-    } else if (item.topMethod === 'unmapped') {
+    } else if (item.resolvedCount === 0) {
+      // relevant but unresolved; don't count as verified/evaluated
+    } else if (item.method === 'unmapped') {
       if (item.rule.verifiability === 'unverifiable') {
         unverifiable++;
       } else {
         needsCustom++;
       }
-    } else if (item.topMethod === 'llm-judge') {
+    } else if (item.method === 'llm-judge') {
       llmEvaluated++;
     } else {
       autoEvaluated++;
@@ -239,10 +155,11 @@ function formatTerminalOutput(
       ' ' +
         ruleText.padEnd(cols.rule) +
         sessionsStr.padEnd(cols.sessions) +
+        resolvedStr.padEnd(cols.resolved) +
         followedStr.padEnd(cols.followed) +
         adherenceStr.padEnd(cols.adherence) +
-        item.topConfidence.padEnd(cols.confidence) +
-        item.topMethod,
+        item.confidence.padEnd(cols.confidence) +
+        item.method,
     );
   }
 
@@ -254,6 +171,7 @@ function formatTerminalOutput(
   if (unverifiable > 0) summary.push(`${unverifiable} unverifiable`);
   if (needsCustom > 0) summary.push(`${needsCustom} needs custom check`);
   if (notExercised > 0) summary.push(`${notExercised} not exercised`);
+  if (inconclusive > 0) summary.push(`${inconclusive} inconclusive`);
   if (summary.length > 0) {
     lines.push(' ' + summary.join(' \u00B7 '));
   }
@@ -265,7 +183,7 @@ function formatJsonOutput(
   filePath: string,
   sinceDate: Date,
   sessionCount: number,
-  adherenceData: RuleAdherence[],
+  adherenceData: ReturnType<typeof aggregateAdherence>,
 ): string {
   return JSON.stringify({
     file: filePath,
@@ -275,12 +193,15 @@ function formatJsonOutput(
       ruleId: item.rule.id,
       text: item.rule.text,
       relevantSessions: item.relevantCount,
+      resolvedSessions: item.resolvedCount,
+      inconclusiveSessions: item.inconclusiveCount,
       totalSessions: item.totalSessions,
       followedCount: item.followedCount,
       adherence: item.adherence,
-      confidence: item.topConfidence,
-      method: item.topMethod,
-      evidence: item.topEvidence,
+      confidence: item.confidence,
+      confidenceReason: item.confidenceReason,
+      method: item.method,
+      evidence: item.evidence,
     })),
   });
 }
@@ -289,7 +210,7 @@ function formatMarkdownOutput(
   filePath: string,
   sinceDate: Date,
   sessionCount: number,
-  adherenceData: RuleAdherence[],
+  adherenceData: ReturnType<typeof aggregateAdherence>,
 ): string {
   const lines: string[] = [];
 
@@ -298,21 +219,22 @@ function formatMarkdownOutput(
   lines.push(`Last modified: ${formatTimeAgo(sinceDate)}`);
   lines.push(`Sessions analyzed: ${sessionCount}`);
   lines.push('');
-  lines.push('| Rule | Sessions | Followed | Adherence | Confidence | Method | Evidence |');
-  lines.push('|------|----------|----------|-----------|------------|--------|----------|');
+  lines.push('| Rule | Sessions | Resolved | Followed | Adherence | Confidence | Method | Evidence |');
+  lines.push('|------|----------|----------|----------|-----------|------------|--------|----------|');
 
   for (const item of adherenceData) {
     const ruleText = item.rule.text.length > 50
       ? item.rule.text.slice(0, 49) + '...'
       : item.rule.text;
     const sessionsStr = `${item.relevantCount}/${item.totalSessions}`;
-    const followedStr = item.relevantCount === 0 ? '-' : `${item.followedCount}/${item.relevantCount}`;
+    const resolvedStr = item.relevantCount === 0 ? '-' : `${item.resolvedCount}/${item.relevantCount}`;
+    const followedStr = item.resolvedCount === 0 ? '-' : `${item.followedCount}/${item.resolvedCount}`;
     const adherenceStr = item.adherence !== null ? `${Math.round(item.adherence * 100)}%` : '-';
-    const evidence = item.topEvidence
-      ? item.topEvidence.replace(/\|/g, '\\|').slice(0, 80)
+    const evidence = item.evidence
+      ? item.evidence.replace(/\|/g, '\\|').slice(0, 80)
       : '—';
 
-    lines.push(`| ${ruleText} | ${sessionsStr} | ${followedStr} | ${adherenceStr} | ${item.topConfidence} | ${item.topMethod} | ${evidence} |`);
+    lines.push(`| ${ruleText} | ${sessionsStr} | ${resolvedStr} | ${followedStr} | ${adherenceStr} | ${item.confidence} | ${item.method} | ${evidence} |`);
   }
 
   return lines.join('\n');
@@ -442,7 +364,7 @@ export function registerCheckCommand(program: Command): void {
 
       // 8. Aggregate observations for current epoch
       const allResults = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
-      const adherenceData = aggregateObservations(rules, allResults);
+      const adherenceData = aggregateAdherence(rules, allResults);
 
       // 9. Output results
       const totalSessions = allResults.length;
@@ -462,7 +384,7 @@ export function registerCheckCommand(program: Command): void {
       // Compute unresolved rules from final adherence data (not just from this run)
       if (totalUnresolved === 0 && !options.deep) {
         const unresolvedFromData = adherenceData.filter(
-          (d) => d.topMethod === 'unmapped'
+          (d) => d.method === 'unmapped'
         );
         if (unresolvedFromData.length > 0) {
           totalUnresolved = unresolvedFromData.length;

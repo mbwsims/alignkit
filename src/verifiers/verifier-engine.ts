@@ -35,6 +35,7 @@ export function verifySession(
           relevant: false,
           method: 'scope:filtered' as const,
           confidence: 'high' as const,
+          evidence: `No touched files matched this rule's scope (${rule.applicability.patterns.join(', ')}).`,
         };
       }
 
@@ -54,6 +55,7 @@ export function verifySession(
         relevant: false,
         method: 'unmapped' as const,
         confidence: 'low' as const,
+        evidence: 'No verifier matched this rule.',
       };
     }
 

@@ -97,6 +97,7 @@ describe('check command', () => {
     expect(stdout).toContain('RULE ADHERENCE');
     expect(stdout).toContain('Rule');
     expect(stdout).toContain('Sessions');
+    expect(stdout).toContain('Resolved');
     expect(stdout).toContain('Followed');
     expect(stdout).toContain('Adherence');
     expect(stdout).toContain('Confidence');
@@ -123,6 +124,7 @@ describe('check command', () => {
     expect(stdout).toContain('# Rule Adherence');
     expect(stdout).toContain('| Rule |');
     expect(stdout).toContain('|------|');
+    expect(stdout).toContain('Resolved');
   });
 
   it('accepts explicit file argument', () => {

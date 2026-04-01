@@ -5,6 +5,7 @@ import { discoverInstructionTargets } from '../../parsers/auto-detect.js';
 import { loadEffectiveInstructionGraph } from '../../parsers/instruction-loader.js';
 import { readSessions } from '../../sessions/session-reader.js';
 import { verifySession } from '../../verifiers/verifier-engine.js';
+import { aggregateAdherence } from '../../check/adherence.js';
 import { ANALYSIS_VERSION } from '../../history/analysis-version.js';
 import { HistoryStore } from '../../history/store.js';
 import type { Observation } from '../../verifiers/types.js';
@@ -18,11 +19,14 @@ export interface CheckToolResult {
   rules: Array<{
     text: string;
     relevantSessions: number;
+    resolvedSessions: number;
+    inconclusiveSessions: number;
     totalSessions: number;
     followed: number;
     adherence: number | null;
     method: string;
     confidence: string;
+    confidenceReason: string;
     evidence?: string;
   }>;
   unresolvedRules: Array<{
@@ -171,88 +175,25 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
   const allResults = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
   // 8. Build per-rule adherence
-  const ruleResults = rules.map((rule) => {
-    let relevantCount = 0;
-    let followedCount = 0;
-    let topConfidence = 'low';
-    let topMethod = 'unmapped';
-    let topEvidence: string | undefined;
-    let strongestIrrelevantMethod = 'unmapped';
-    let strongestIrrelevantConfidence = 'low';
-    let strongestIrrelevantEvidence: string | undefined;
-
-    const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
-    const methodRank: Record<string, number> = {
-      'auto:bash-keyword': 4,
-      'auto:file-pattern': 4,
-      'auto:bash-sequence': 3,
-      'auto:heuristic-structure': 3,
-      'scope:filtered': 2,
-      unmapped: 1,
-    };
-
-    for (const result of allResults) {
-      for (const obs of result.observations) {
-        if (obs.ruleId !== rule.id) continue;
-        if (obs.relevant) {
-          relevantCount++;
-          if (obs.followed === true) {
-            followedCount++;
-          }
-          const obsConfidence = confidenceRank[obs.confidence] ?? 0;
-          const topConfidenceValue = confidenceRank[topConfidence] ?? 0;
-          const obsMethodRank = methodRank[obs.method] ?? 0;
-          const topMethodRank = methodRank[topMethod] ?? 0;
-
-          if (
-            obsConfidence > topConfidenceValue ||
-            (obsConfidence === topConfidenceValue && obsMethodRank > topMethodRank)
-          ) {
-            topConfidence = obs.confidence;
-            topMethod = obs.method;
-            topEvidence = obs.evidence;
-          }
-        } else {
-          const obsConfidence = confidenceRank[obs.confidence] ?? 0;
-          const strongestConfidenceValue = confidenceRank[strongestIrrelevantConfidence] ?? 0;
-          const obsMethodRank = methodRank[obs.method] ?? 0;
-          const strongestMethodRank = methodRank[strongestIrrelevantMethod] ?? 0;
-
-          if (
-            obsConfidence > strongestConfidenceValue ||
-            (obsConfidence === strongestConfidenceValue && obsMethodRank > strongestMethodRank)
-          ) {
-            strongestIrrelevantConfidence = obs.confidence;
-            strongestIrrelevantMethod = obs.method;
-            strongestIrrelevantEvidence = obs.evidence;
-          }
-        }
-      }
-    }
-
-    if (relevantCount === 0) {
-      topConfidence = strongestIrrelevantConfidence;
-      topMethod = strongestIrrelevantMethod;
-      topEvidence = strongestIrrelevantEvidence;
-    }
-
-    return {
-      text: rule.text,
-      relevantSessions: relevantCount,
-      totalSessions: allResults.length,
-      followed: followedCount,
-      adherence: relevantCount > 0 ? followedCount / relevantCount : null,
-      method: topMethod,
-      confidence: topConfidence,
-      evidence: topEvidence,
-    };
-  });
+  const ruleResults = aggregateAdherence(rules, allResults).map((item) => ({
+    text: item.rule.text,
+    relevantSessions: item.relevantCount,
+    resolvedSessions: item.resolvedCount,
+    inconclusiveSessions: item.inconclusiveCount,
+    totalSessions: item.totalSessions,
+    followed: item.followedCount,
+    adherence: item.adherence,
+    method: item.method,
+    confidence: item.confidence,
+    confidenceReason: item.confidenceReason,
+    evidence: item.evidence,
+  }));
 
   // 9. Identify unresolved rules and attach session action summaries
   const unresolvedRules: CheckToolResult['unresolvedRules'] = [];
   for (const rule of rules) {
     const ruleResult = ruleResults.find((r) => r.text === rule.text);
-    if (ruleResult && ruleResult.method === 'unmapped') {
+    if (ruleResult && (ruleResult.method === 'unmapped' || (ruleResult.relevantSessions > 0 && ruleResult.resolvedSessions === 0))) {
       const sessionActions: CheckToolResult['unresolvedRules'][0]['sessionActions'] = [];
 
       // Use stored action summaries or gather from recent sessions
