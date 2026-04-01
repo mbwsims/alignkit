@@ -124,6 +124,18 @@ describe('loadEffectiveInstructionGraph', () => {
   it('stacks ancestor CLAUDE.md and CLAUDE.local.md files for nested targets', () => {
     writeFile(tmpDir, 'CLAUDE.md', '- Use pnpm for package management.\n');
     writeFile(tmpDir, 'CLAUDE.local.md', '- Use the local sandbox.\n');
+    writeFile(
+      tmpDir,
+      '.claude/rules/frontend.md',
+      [
+        '---',
+        'paths:',
+        '  - "apps/api/**"',
+        '---',
+        '',
+        '- Use REST endpoints for API routes.',
+      ].join('\n'),
+    );
     const nestedFile = writeFile(tmpDir, 'apps/api/CLAUDE.md', '- Run API tests before committing.\n');
     writeFile(tmpDir, 'apps/api/CLAUDE.local.md', '- Use the API sandbox.\n');
 
@@ -133,12 +145,14 @@ describe('loadEffectiveInstructionGraph', () => {
     expect(texts).toEqual([
       'Use pnpm for package management.',
       'Use the local sandbox.',
+      'Use REST endpoints for API routes.',
       'Run API tests before committing.',
       'Use the API sandbox.',
     ]);
     expect(graph.entryFiles).toEqual([
       join(tmpDir, 'CLAUDE.md'),
       join(tmpDir, 'CLAUDE.local.md'),
+      join(tmpDir, '.claude/rules/frontend.md'),
       join(tmpDir, 'apps/api/CLAUDE.md'),
       join(tmpDir, 'apps/api/CLAUDE.local.md'),
     ]);

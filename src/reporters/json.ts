@@ -18,6 +18,13 @@ export class JsonReporter implements Reporter {
       category: rule.category,
       verifiability: rule.verifiability,
       source: rule.source,
+      applicability: rule.applicability
+        ? {
+            kind: rule.applicability.kind,
+            patterns: rule.applicability.patterns,
+            source: rule.applicability.source,
+          }
+        : undefined,
       diagnosticCount: rule.diagnostics.length,
     }));
 

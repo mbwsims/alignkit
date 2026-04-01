@@ -111,4 +111,32 @@ describe('verifySession', () => {
     expect(results[0].ruleId).toBe('rule-git');
     expect(results[0].sessionId).toBe('my-session');
   });
+
+  it('marks path-scoped rules irrelevant when the session never touches matching files', () => {
+    const rules = [
+      makeRule('use pnpm not npm', {
+        id: 'r-scoped',
+        applicability: {
+          kind: 'path-scoped',
+          patterns: ['frontend/**'],
+          baseDir: '/repo',
+          source: 'claude-paths',
+        },
+      }),
+    ];
+    const actions: AgentAction[] = [
+      {
+        type: 'edit',
+        filePath: '/repo/backend/service.ts',
+        oldContent: '',
+        newContent: '',
+        timestamp: '2026-01-01T00:00:00Z',
+      },
+      bash('pnpm install'),
+    ];
+
+    const results = verifySession(rules, actions, 'sess-1', '/repo');
+    expect(results[0].relevant).toBe(false);
+    expect(results[0].method).toBe('scope:filtered');
+  });
 });

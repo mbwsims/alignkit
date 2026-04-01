@@ -75,6 +75,7 @@ export class TerminalReporter implements Reporter {
     const redundant = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'REDUNDANT').length;
     const linterJob = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'LINTER_JOB').length;
     const weakEmphasis = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'WEAK_EMPHASIS').length;
+    const pathScoped = result.rules.filter((r) => r.applicability?.kind === 'path-scoped').length;
 
     // HEALTH summary — includes rule count with recommended ceiling
     const ruleCount = result.rules.length;
@@ -92,6 +93,7 @@ export class TerminalReporter implements Reporter {
     if (redundant > 0) healthParts.push(`${redundant} redundant`);
     if (linterJob > 0) healthParts.push(`${linterJob} linter-job`);
     if (weakEmphasis > 0) healthParts.push(`${weakEmphasis} weak-emphasis`);
+    if (pathScoped > 0) healthParts.push(`${pathScoped} path-scoped`);
 
     lines.push(
       `${pc.bold('HEALTH')}  ${healthParts.join(', ')}`

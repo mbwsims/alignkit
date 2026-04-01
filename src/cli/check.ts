@@ -87,9 +87,12 @@ function aggregateObservations(
       'auto:file-pattern': 4,
       'auto:bash-sequence': 3,
       'auto:heuristic-structure': 3,
+      'scope:filtered': 2,
       'llm-judge': 2,
       unmapped: 1,
     };
+    let strongestIrrelevantMethod = 'unmapped';
+    let strongestIrrelevantConfidence = 'low';
 
     for (const result of allResults) {
       for (const obs of result.observations) {
@@ -111,8 +114,26 @@ function aggregateObservations(
             topConfidence = obs.confidence;
             topMethod = obs.method;
           }
+        } else {
+          const obsConfidence = confidenceRank[obs.confidence] ?? 0;
+          const strongestConfidenceValue = confidenceRank[strongestIrrelevantConfidence] ?? 0;
+          const obsMethodRank = methodRank[obs.method] ?? 0;
+          const strongestMethodRank = methodRank[strongestIrrelevantMethod] ?? 0;
+
+          if (
+            obsConfidence > strongestConfidenceValue ||
+            (obsConfidence === strongestConfidenceValue && obsMethodRank > strongestMethodRank)
+          ) {
+            strongestIrrelevantConfidence = obs.confidence;
+            strongestIrrelevantMethod = obs.method;
+          }
         }
       }
+    }
+
+    if (relevantCount === 0) {
+      topConfidence = strongestIrrelevantConfidence;
+      topMethod = strongestIrrelevantMethod;
     }
 
     return {
@@ -348,12 +369,12 @@ export function registerCheckCommand(program: Command): void {
           store.removeSession(session.sessionId, rulesVersion, ANALYSIS_VERSION);
         }
 
-        let observations = verifySession(rules, session.actions, session.sessionId);
+        let observations = verifySession(rules, session.actions, session.sessionId, cwd);
 
         // Identify rules that auto-verification couldn't resolve
         const needsLLMIds = new Set(
           observations
-            .filter((o) => o.method === 'unmapped' || !o.relevant)
+            .filter((o) => o.method === 'unmapped' || (!o.relevant && o.method !== 'scope:filtered'))
             .map((o) => o.ruleId),
         );
         const unresolvedRules = rules.filter((r) => needsLLMIds.has(r.id));

@@ -183,6 +183,31 @@ describe('HistoryStore', () => {
       const secondHash = HistoryStore.computeRulesVersion(nestedFile, tmpDir);
       expect(secondHash).not.toBe(firstHash);
     });
+
+    it('changes when a .claude/rules file changes for a Claude memory target', () => {
+      const rootFile = join(tmpDir, 'CLAUDE.md');
+      const rulesDir = join(tmpDir, '.claude', 'rules');
+      const ruleFile = join(rulesDir, 'frontend.md');
+
+      mkdirSync(rulesDir, { recursive: true });
+      writeFileSync(rootFile, '- Use pnpm.\n', 'utf-8');
+      writeFileSync(
+        ruleFile,
+        ['---', 'paths:', '  - "apps/web/**"', '---', '', '- Use React components.'].join('\n'),
+        'utf-8',
+      );
+
+      const firstHash = HistoryStore.computeRulesVersion(rootFile, tmpDir);
+
+      writeFileSync(
+        ruleFile,
+        ['---', 'paths:', '  - "apps/web/**"', '---', '', '- Use server components by default.'].join('\n'),
+        'utf-8',
+      );
+
+      const secondHash = HistoryStore.computeRulesVersion(rootFile, tmpDir);
+      expect(secondHash).not.toBe(firstHash);
+    });
   });
 
   describe('queryByEpoch', () => {

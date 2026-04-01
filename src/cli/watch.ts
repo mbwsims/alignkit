@@ -174,7 +174,7 @@ export function registerWatchCommand(program: Command): void {
           for (const session of sessions) {
             if (store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) continue;
 
-            const observations = verifySession(rules, session.actions, session.sessionId);
+            const observations = verifySession(rules, session.actions, session.sessionId, cwd);
             const result: SessionResult = {
               sessionId: session.sessionId,
               timestamp: session.timestamp,

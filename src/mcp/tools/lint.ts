@@ -18,6 +18,11 @@ export interface LintToolResult {
     text: string;
     category: string;
     verifiability: string;
+    applicability?: {
+      kind: string;
+      patterns: string[];
+      source: string;
+    };
     diagnostics: Array<{ code: string; severity: string; message: string }>;
   }>;
   tokenAnalysis: TokenAnalysis;
@@ -121,6 +126,13 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
     text: r.text,
     category: r.category,
     verifiability: r.verifiability,
+    applicability: r.applicability
+      ? {
+          kind: r.applicability.kind,
+          patterns: r.applicability.patterns,
+          source: r.applicability.source,
+        }
+      : undefined,
     diagnostics: r.diagnostics.map((d) => ({
       code: d.code,
       severity: d.severity,

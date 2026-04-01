@@ -53,4 +53,31 @@ describe('detectConflicts', () => {
     detectConflicts(rules);
     expect(JSON.stringify(rules)).toBe(original);
   });
+
+  it('does not flag conflicts across non-overlapping path scopes', () => {
+    const rules = [
+      {
+        ...makeRule('Use pnpm for packages'),
+        applicability: {
+          kind: 'path-scoped' as const,
+          patterns: ['frontend/**'],
+          baseDir: '/repo',
+          source: 'claude-paths' as const,
+        },
+      },
+      {
+        ...makeRule('Use npm for packages'),
+        applicability: {
+          kind: 'path-scoped' as const,
+          patterns: ['backend/**'],
+          baseDir: '/repo',
+          source: 'claude-paths' as const,
+        },
+      },
+    ];
+
+    const result = detectConflicts(rules);
+    const conflicts = result.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT');
+    expect(conflicts).toHaveLength(0);
+  });
 });

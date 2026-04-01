@@ -1,4 +1,5 @@
 import type { Rule, Diagnostic } from '../parsers/types.js';
+import { rulesMayOverlap } from '../parsers/rule-applicability.js';
 
 const TOOL_GROUPS: string[][] = [
   ['pnpm', 'npm', 'yarn', 'bun'],
@@ -98,6 +99,10 @@ export function detectConflicts(rules: Rule[]): Rule[] {
     for (let j = i + 1; j < rules.length; j++) {
       const ruleA = rules[i];
       const ruleB = rules[j];
+
+      if (!rulesMayOverlap(ruleA, ruleB)) {
+        continue;
+      }
 
       let conflictReason: string | null = null;
 

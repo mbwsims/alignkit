@@ -94,6 +94,13 @@ describe('discoverInstructionFiles', () => {
     expect(files[0].relativePath).toBe('.cursor/rules/typescript.mdc');
   });
 
+  it('finds .claude/rules/*.md files', () => {
+    writeFile(tmpDir, '.claude/rules/frontend.md', '# Rules\n\n- Use React.\n');
+    const files = discoverInstructionFiles(tmpDir);
+    expect(files).toHaveLength(1);
+    expect(files[0].relativePath).toBe('.claude/rules/frontend.md');
+  });
+
   it('returns primary file first by priority when both CLAUDE.md and .cursorrules exist', () => {
     writeFile(tmpDir, 'CLAUDE.md', CLAUDE_MD_CONTENT);
     writeFile(tmpDir, '.cursorrules', CURSORRULES_CONTENT);
@@ -135,6 +142,7 @@ describe('discoverInstructionTargets', () => {
   it('collapses same-directory Claude memory files into a single target', () => {
     writeFile(tmpDir, 'CLAUDE.md', CLAUDE_MD_CONTENT);
     writeFile(tmpDir, 'CLAUDE.local.md', CLAUDE_MD_CONTENT);
+    writeFile(tmpDir, '.claude/rules/frontend.md', '# Rules\n\n- Use React.\n');
     writeFile(tmpDir, 'apps/api/CLAUDE.md', CLAUDE_MD_CONTENT);
     writeFile(tmpDir, 'apps/api/CLAUDE.local.md', CLAUDE_MD_CONTENT);
     writeFile(tmpDir, 'AGENTS.md', AGENTS_MD_CONTENT);
@@ -174,6 +182,32 @@ describe('parseInstructionFile', () => {
     expect(texts).toContain('Use TypeScript strict mode.');
     expect(texts).toContain('Never use `any`.');
     expect(texts.some((text) => text.includes('description:'))).toBe(false);
+  });
+
+  it('parses .claude/rules content and attaches path applicability from frontmatter', () => {
+    const rules = parseInstructionFile(
+      [
+        '---',
+        'description: Frontend rules',
+        'paths:',
+        '  - "apps/web/**"',
+        '---',
+        '',
+        '# Rules',
+        '',
+        '- Use React for UI components.',
+      ].join('\n'),
+      '/project/.claude/rules/frontend.md',
+      '/project',
+    );
+
+    expect(rules).toHaveLength(1);
+    expect(rules[0].applicability).toEqual({
+      kind: 'path-scoped',
+      patterns: ['apps/web/**'],
+      baseDir: '/project',
+      source: 'claude-paths',
+    });
   });
 
   it('parses AGENTS.md content and returns rules', () => {

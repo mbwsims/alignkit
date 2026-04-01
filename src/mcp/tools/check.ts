@@ -150,7 +150,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
       continue;
     }
 
-    const observations = verifySession(rules, session.actions, session.sessionId);
+    const observations = verifySession(rules, session.actions, session.sessionId, cwd);
 
     const result: SessionResult = {
       sessionId: session.sessionId,
@@ -175,8 +175,18 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
     let followedCount = 0;
     let topConfidence = 'low';
     let topMethod = 'unmapped';
+    let strongestIrrelevantMethod = 'unmapped';
+    let strongestIrrelevantConfidence = 'low';
 
     const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const methodRank: Record<string, number> = {
+      'auto:bash-keyword': 4,
+      'auto:file-pattern': 4,
+      'auto:bash-sequence': 3,
+      'auto:heuristic-structure': 3,
+      'scope:filtered': 2,
+      unmapped: 1,
+    };
 
     for (const result of allResults) {
       for (const obs of result.observations) {
@@ -186,12 +196,38 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
           if (obs.followed === true) {
             followedCount++;
           }
-          if ((confidenceRank[obs.confidence] ?? 0) > (confidenceRank[topConfidence] ?? 0)) {
+          const obsConfidence = confidenceRank[obs.confidence] ?? 0;
+          const topConfidenceValue = confidenceRank[topConfidence] ?? 0;
+          const obsMethodRank = methodRank[obs.method] ?? 0;
+          const topMethodRank = methodRank[topMethod] ?? 0;
+
+          if (
+            obsConfidence > topConfidenceValue ||
+            (obsConfidence === topConfidenceValue && obsMethodRank > topMethodRank)
+          ) {
             topConfidence = obs.confidence;
+            topMethod = obs.method;
           }
-          topMethod = obs.method;
+        } else {
+          const obsConfidence = confidenceRank[obs.confidence] ?? 0;
+          const strongestConfidenceValue = confidenceRank[strongestIrrelevantConfidence] ?? 0;
+          const obsMethodRank = methodRank[obs.method] ?? 0;
+          const strongestMethodRank = methodRank[strongestIrrelevantMethod] ?? 0;
+
+          if (
+            obsConfidence > strongestConfidenceValue ||
+            (obsConfidence === strongestConfidenceValue && obsMethodRank > strongestMethodRank)
+          ) {
+            strongestIrrelevantConfidence = obs.confidence;
+            strongestIrrelevantMethod = obs.method;
+          }
         }
       }
+    }
+
+    if (relevantCount === 0) {
+      topConfidence = strongestIrrelevantConfidence;
+      topMethod = strongestIrrelevantMethod;
     }
 
     return {

@@ -7,22 +7,13 @@ function hasMarkdownStructure(content: string): boolean {
   return /(^#{1,6}\s)|(^[-*]\s)|(^\d+\.\s)|(^```)/m.test(content);
 }
 
-export function parseCursorrules(content: string, filePath: string, cwd?: string): Rule[] {
-  const normalized = extractInstructionFrontmatter(content).bodyPreservingLines;
+export function parseClaudeRules(content: string, filePath: string, cwd?: string): Rule[] {
+  const { bodyPreservingLines } = extractInstructionFrontmatter(content);
 
-  const parsed = hasMarkdownStructure(normalized)
-    ? parseMarkdown(normalized, filePath)
+  const parsed = hasMarkdownStructure(bodyPreservingLines)
+    ? parseMarkdown(bodyPreservingLines, filePath)
     : parseMarkdown(
-        [
-          '# Rules',
-          '',
-          ...normalized
-            .split('\n')
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0 && !line.startsWith('//'))
-            .map((line) => `- ${line}`),
-          '',
-        ].join('\n'),
+        ['# Rules', '', ...bodyPreservingLines.split('\n').filter((line) => line.trim()).map((line) => `- ${line.trim()}`), ''].join('\n'),
         filePath,
       );
 

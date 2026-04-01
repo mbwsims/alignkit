@@ -2,8 +2,14 @@ import path from 'node:path';
 import { globbySync } from 'globby';
 import type { Rule } from './types.js';
 import { parseClaudeMd } from './claude-md.js';
+import { parseClaudeRules } from './claude-rules.js';
 import { parseAgentsMd } from './agents-md.js';
 import { parseCursorrules } from './cursorrules.js';
+import {
+  isClaudeMemoryFilePath,
+  isClaudeRulesFilePath,
+  isCursorRulesFilePath,
+} from './instruction-paths.js';
 
 export interface DiscoveredFile {
   absolutePath: string;
@@ -27,15 +33,12 @@ function getRootPriority(relativePath: string): number {
   return priority !== undefined ? priority : 99;
 }
 
-export function isClaudeMemoryFilePath(filePath: string): boolean {
-  const basename = path.basename(filePath);
-  return basename === 'CLAUDE.md' || basename === 'CLAUDE.local.md';
-}
-
 export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
   const patterns = [
     '**/CLAUDE.md',
     '**/CLAUDE.local.md',
+    '**/.claude/rules/**/*.md',
+    '**/.claude/rules/**/*.mdc',
     '**/AGENTS.md',
     '**/.cursorrules',
     '**/.cursor/rules',
@@ -76,6 +79,7 @@ export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
 export function discoverInstructionTargets(cwd: string): DiscoveredFile[] {
   const discovered = discoverInstructionFiles(cwd);
   const primaryClaudeFileByDir = new Map<string, string>();
+  const hasClaudeMemoryTargets = discovered.some((file) => isClaudeMemoryFilePath(file.absolutePath));
 
   for (const file of discovered) {
     if (!isClaudeMemoryFilePath(file.absolutePath)) continue;
@@ -92,13 +96,16 @@ export function discoverInstructionTargets(cwd: string): DiscoveredFile[] {
   }
 
   return discovered.filter((file) => {
+    if (hasClaudeMemoryTargets && isClaudeRulesFilePath(file.absolutePath)) {
+      return false;
+    }
     if (!isClaudeMemoryFilePath(file.absolutePath)) return true;
     const dirKey = path.dirname(file.relativePath);
     return primaryClaudeFileByDir.get(dirKey) === file.relativePath;
   });
 }
 
-export function parseInstructionFile(content: string, filePath: string): Rule[] {
+export function parseInstructionFile(content: string, filePath: string, cwd?: string): Rule[] {
   const basename = path.basename(filePath);
 
   switch (basename) {
@@ -109,10 +116,13 @@ export function parseInstructionFile(content: string, filePath: string): Rule[] 
       return parseAgentsMd(content, filePath);
     case '.cursorrules':
     case 'rules':
-      return parseCursorrules(content, filePath);
+      return parseCursorrules(content, filePath, cwd);
     default:
-      if (filePath.includes(`${path.sep}.cursor${path.sep}rules${path.sep}`) || basename.endsWith('.mdc')) {
-        return parseCursorrules(content, filePath);
+      if (isClaudeRulesFilePath(filePath)) {
+        return parseClaudeRules(content, filePath, cwd);
+      }
+      if (isCursorRulesFilePath(filePath) || basename.endsWith('.mdc')) {
+        return parseCursorrules(content, filePath, cwd);
       }
       return parseClaudeMd(content, filePath);
   }

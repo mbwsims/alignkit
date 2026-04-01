@@ -8,6 +8,8 @@ export type RuleCategory =
 
 export type Verifiability = 'auto' | 'user-config' | 'unverifiable';
 
+import type { RuleApplicability } from './rule-applicability.js';
+
 export interface Diagnostic {
   severity: 'error' | 'warning';
   code: 'VAGUE' | 'CONFLICT' | 'REDUNDANT' | 'STALE' | 'ORDERING'
@@ -30,4 +32,5 @@ export interface Rule {
   category: RuleCategory;
   verifiability: Verifiability;
   diagnostics: Diagnostic[];
+  applicability?: RuleApplicability;
 }

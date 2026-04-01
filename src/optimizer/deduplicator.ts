@@ -1,4 +1,5 @@
 import type { Rule } from '../parsers/types.js';
+import { rulesMayOverlap } from '../parsers/rule-applicability.js';
 
 export interface DeduplicationResult {
   kept: Rule;
@@ -45,6 +46,7 @@ export function deduplicateRules(
     if (removed.has(i)) continue;
     for (let j = i + 1; j < rules.length; j++) {
       if (removed.has(j)) continue;
+      if (!rulesMayOverlap(rules[i], rules[j])) continue;
       const similarity = jaccardSimilarity(tokenSets[i], tokenSets[j]);
       if (similarity >= JACCARD_THRESHOLD) {
         const adhI = adherenceMap.get(rules[i].id) ?? 0;

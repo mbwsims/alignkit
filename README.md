@@ -242,6 +242,7 @@ npx alignkit check --format json
 | Format | init | lint | check |
 |---|---|---|---|
 | CLAUDE.md | Yes | Yes | Yes (Claude Code sessions) |
+| .claude/rules | — | Yes | Yes (Claude Code sessions) |
 | AGENTS.md | — | Yes | Yes (Claude Code sessions) |
 | .cursorrules | — | Yes | Not yet |
 | .cursor/rules | — | Yes | Not yet |

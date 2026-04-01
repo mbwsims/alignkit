@@ -42,4 +42,31 @@ describe('detectDuplicates', () => {
     detectDuplicates(rules);
     expect(JSON.stringify(rules)).toBe(original);
   });
+
+  it('does not flag duplicates across non-overlapping path scopes', () => {
+    const rules = [
+      {
+        ...makeRule('Use pnpm instead of npm'),
+        applicability: {
+          kind: 'path-scoped' as const,
+          patterns: ['frontend/**'],
+          baseDir: '/repo',
+          source: 'claude-paths' as const,
+        },
+      },
+      {
+        ...makeRule('Always use pnpm, never npm'),
+        applicability: {
+          kind: 'path-scoped' as const,
+          patterns: ['backend/**'],
+          baseDir: '/repo',
+          source: 'claude-paths' as const,
+        },
+      },
+    ];
+
+    const result = detectDuplicates(rules);
+    const redundant = result.flatMap((r) => r.diagnostics).filter((d) => d.code === 'REDUNDANT');
+    expect(redundant).toHaveLength(0);
+  });
 });

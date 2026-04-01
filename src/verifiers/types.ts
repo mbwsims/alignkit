@@ -23,6 +23,7 @@ export type VerificationMethod =
   | 'auto:bash-sequence'
   | 'auto:file-pattern'
   | 'auto:heuristic-structure'
+  | 'scope:filtered'
   | 'user:custom'
   | 'llm-judge'
   | 'unmapped';

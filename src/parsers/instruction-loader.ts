@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { globbySync } from 'globby';
 import type { Rule } from './types.js';
-import { isClaudeMemoryFilePath, parseInstructionFile } from './auto-detect.js';
+import { parseInstructionFile } from './auto-detect.js';
+import { isClaudeMemoryFilePath } from './instruction-paths.js';
+import type { RuleApplicability } from './rule-applicability.js';
+import { getInstructionFileApplicability } from './rule-applicability.js';
 
 const MAX_IMPORT_DEPTH = 5;
 
@@ -60,25 +64,51 @@ interface LoadedFile {
   content: string;
 }
 
-function buildInstructionGraph(rootFile: string, entryFiles: string[]): InstructionGraph {
-  const loadedFiles: LoadedFile[] = [];
+function applicabilityKey(applicability: RuleApplicability | undefined): string {
+  if (!applicability) return 'global';
+  return [
+    applicability.kind,
+    applicability.source,
+    applicability.baseDir,
+    ...applicability.patterns,
+  ].join('::');
+}
+
+function buildInstructionGraph(rootFile: string, entryFiles: string[], cwd?: string): InstructionGraph {
+  const loadedFiles = new Map<string, LoadedFile>();
   const rules: Rule[] = [];
   const visited = new Set<string>();
 
-  function visit(currentFile: string, depth: number): void {
+  function visit(
+    currentFile: string,
+    depth: number,
+    inheritedApplicability?: RuleApplicability,
+  ): void {
     const resolved = path.resolve(currentFile);
-    if (visited.has(resolved)) return;
+    const visitKey = `${resolved}::${applicabilityKey(inheritedApplicability)}`;
+    if (visited.has(visitKey)) return;
     if (depth > MAX_IMPORT_DEPTH) return;
     if (!existsSync(resolved)) return;
 
-    visited.add(resolved);
+    visited.add(visitKey);
 
-    const content = readFileSync(resolved, 'utf-8');
-    loadedFiles.push({ filePath: resolved, content });
-    rules.push(...parseInstructionFile(content, resolved));
+    const existingLoaded = loadedFiles.get(resolved);
+    const content = existingLoaded?.content ?? readFileSync(resolved, 'utf-8');
+    if (!existingLoaded) {
+      loadedFiles.set(resolved, { filePath: resolved, content });
+    }
+
+    const fileApplicability = getInstructionFileApplicability(resolved, content, cwd);
+    const effectiveApplicability = fileApplicability ?? inheritedApplicability;
+    const parsedRules = parseInstructionFile(content, resolved, cwd).map((rule) =>
+      effectiveApplicability && !rule.applicability
+        ? { ...rule, applicability: effectiveApplicability }
+        : rule,
+    );
+    rules.push(...parsedRules);
 
     for (const importPath of extractImports(content)) {
-      visit(resolveImportPath(resolved, importPath), depth + 1);
+      visit(resolveImportPath(resolved, importPath), depth + 1, effectiveApplicability);
     }
   }
 
@@ -88,7 +118,7 @@ function buildInstructionGraph(rootFile: string, entryFiles: string[]): Instruct
 
   const graphHash = createHash('sha256')
     .update(
-      loadedFiles
+      Array.from(loadedFiles.values())
         .map((file) => `${file.filePath}\n${file.content}`)
         .join('\n---alignkit-import-boundary---\n'),
     )
@@ -99,7 +129,7 @@ function buildInstructionGraph(rootFile: string, entryFiles: string[]): Instruct
     rootFile,
     entryFiles,
     rules,
-    loadedFiles: loadedFiles.map((file) => file.filePath),
+    loadedFiles: Array.from(loadedFiles.values()).map((file) => file.filePath),
     graphHash,
   };
 }
@@ -143,12 +173,21 @@ function resolveEffectiveMemoryEntryFiles(filePath: string, cwd: string): string
   for (const dir of directories.reverse()) {
     const sharedFile = path.join(dir, 'CLAUDE.md');
     const localFile = path.join(dir, 'CLAUDE.local.md');
+    const rulesDir = path.join(dir, '.claude', 'rules');
 
     if (existsSync(sharedFile)) {
       entryFiles.push(sharedFile);
     }
     if (existsSync(localFile)) {
       entryFiles.push(localFile);
+    }
+    if (existsSync(rulesDir)) {
+      const ruleFiles = globbySync(['**/*.md', '**/*.mdc'], {
+        cwd: rulesDir,
+        absolute: true,
+        dot: true,
+      }).sort();
+      entryFiles.push(...ruleFiles);
     }
   }
 
@@ -168,11 +207,12 @@ export function loadEffectiveInstructionGraph(filePath: string, cwd: string): In
   const rootFile = path.resolve(filePath);
 
   if (!isClaudeMemoryFilePath(rootFile)) {
-    return loadInstructionGraph(rootFile);
+    return buildInstructionGraph(rootFile, [rootFile], cwd);
   }
 
   return buildInstructionGraph(
     rootFile,
     resolveEffectiveMemoryEntryFiles(rootFile, cwd),
+    cwd,
   );
 }
