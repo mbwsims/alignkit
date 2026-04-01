@@ -17,6 +17,9 @@ const DIRECTIVE_START_PATTERN =
 const CONDITIONAL_DIRECTIVE_PATTERN =
   /^(?:when|if|for|during|before|after)\b.{0,160}\b(?:always|never|must|should|use|run|create|prefer|avoid|ensure|write|keep|ask|do not|don't|make sure)\b/i;
 
+const WORKFLOW_DIRECTIVE_PATTERN =
+  /^(?:(?:when|if)\b.{0,220}\b(?:first|then|next|finally|always include|start with|walk through|draw|highlight)\b|(?:deploy|release|publish|ship|explain|document|summari[sz]e|generate|scaffold|prepare|onboard)\b.{0,220}\b(?:first|then|next|finally|always include|start with)\b)/i;
+
 const INLINE_CONSTRAINT_PATTERN =
   /\b(?:use\s+\w+\s+(?:not|instead of)\s+\w+|prefer\s+\w+\s+over\s+\w+|separate from|commit both|for all|no\s+\w+\s+(?:except|unless)|not\s+\w+\s+(?:except|unless))\b/i;
 
@@ -94,6 +97,7 @@ export function isNormativeText(text: string, section: string | null = null): bo
   return (
     DIRECTIVE_START_PATTERN.test(normalized) ||
     CONDITIONAL_DIRECTIVE_PATTERN.test(normalized) ||
+    WORKFLOW_DIRECTIVE_PATTERN.test(normalized) ||
     INLINE_CONSTRAINT_PATTERN.test(normalized) ||
     EMPHATIC_DIRECTIVE_PATTERN.test(normalized)
   );

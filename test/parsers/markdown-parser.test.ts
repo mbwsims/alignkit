@@ -172,6 +172,37 @@ This tool helps you understand your rules.
     });
   });
 
+  describe('workflow-style instructions', () => {
+    it('treats conditional playbook sentences as normative rules', () => {
+      const content = [
+        '- When explaining complex code, first start with an analogy, then draw a simple diagram, then walk through the execution path.',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+      const texts = rules.map((rule) => rule.text);
+
+      expect(texts).toContain(
+        'When explaining complex code, first start with an analogy, then draw a simple diagram, then walk through the execution path.',
+      );
+    });
+
+    it('treats always-include playbooks with indented steps as a single rule', () => {
+      const content = [
+        '- When explaining code, always include:',
+        '  1. Start with an analogy.',
+        '  2. Draw a simple diagram.',
+        '  3. Walk through the execution path.',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+
+      expect(rules).toHaveLength(1);
+      expect(rules[0].text).toBe(
+        'When explaining code, always include: 1. Start with an analogy. 2. Draw a simple diagram. 3. Walk through the execution path.',
+      );
+    });
+  });
+
   describe('parser hardening', () => {
     it('preserves multi-line list items as a single rule', () => {
       const content = [

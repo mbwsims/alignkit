@@ -253,7 +253,7 @@ describe('lintTool', () => {
       [
         '- For `apps/web/**`, use React Server Components by default.',
         '- After every file edit, run eslint --fix on the changed file.',
-        '- When explaining complex code, always include an analogy, a simple diagram, and a walkthrough of the execution path.',
+        '- When explaining complex code, first start with an analogy, then draw a simple diagram, then walk through the execution path.',
       ].join('\n'),
     );
 
