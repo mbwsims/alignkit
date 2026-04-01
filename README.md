@@ -10,34 +10,27 @@ alignkit is currently in beta. It is optimized for Claude Code projects, with br
 npx alignkit
 ```
 
-## What it does
+## Commands
 
-**`check`** reads Claude Code session history and estimates whether each rule was actually followed. It separates relevant sessions from resolved and inconclusive evidence, surfaces supporting evidence, and shows which rules were never exercised at all. With `--deep`, it uses an LLM to evaluate rules that pattern matching cannot judge reliably.
+**`alignkit check`** — reads Claude Code session history and estimates whether each rule was actually followed. Separates relevant sessions from resolved and inconclusive evidence, and shows which rules were never exercised. With `--deep`, uses an LLM to evaluate rules that pattern matching cannot judge.
 
-**`lint`** finds problems in your instruction files before the agent ever sees them — vague rules, contradictions, redundancies, stale version references, poor ordering, formatting rules that belong in a linter, critical rules that use weak language, and rules that belong in scoped files, skills, hooks, or subagents instead of global memory.
+**`alignkit lint`** — finds structural problems in your instruction files — vague rules, contradictions, redundancies, poor ordering, misplaced rules, and rules that belong in a linter instead of memory. With `--deep`, predicts which rules the agent will ignore, flags rules Claude already knows, identifies coverage gaps, and suggests consolidation.
 
-**`lint --deep`** uses an LLM to go further: predicts which rules the agent is likely to ignore, flags rules Claude already knows from reading code, identifies important behaviors your rules don't cover, and suggests how to consolidate related rules into fewer, stronger ones.
+**`alignkit init`** — generates a starter `CLAUDE.md` if you don't have one yet. Detects your stack (framework, test runner, database, styling, package manager) and assembles rules from templates. With `--deep`, uses an LLM for a more tailored result.
 
-**`init`** generates a starter `CLAUDE.md` for your project if you do not have one yet. It detects your stack (framework, test runner, database, styling, package manager) and assembles rules from templates. With `--deep`, it uses an LLM for a more tailored result.
+**`alignkit optimize`** — generates an improved instruction file based on lint diagnostics and adherence data. Never modifies the original. With `--deep`, adds LLM-powered consolidation.
 
-## Quick start
+`check`, `lint`, `init`, and `optimize` all support `--deep` for LLM-powered analysis. Requires `ANTHROPIC_API_KEY`.
 
-```bash
-# Check which rules your agent actually follows
-npx alignkit check
+### History-based commands
 
-# Check with LLM evaluation for rules pattern matching can't cover
-npx alignkit check --deep
+`check` writes results to `.alignkit/history.jsonl` each time you run it. The commands below read from that history — the more sessions `check` analyzes, the more useful they become.
 
-# Analyze your instruction file (zero config, free)
-npx alignkit
+**`alignkit status`** — quick pulse check. Shows overall adherence percentage, session count, and trend.
 
-# LLM-powered deep analysis (~$0.05, requires ANTHROPIC_API_KEY)
-npx alignkit lint --deep
+**`alignkit report`** — trend analysis with recommendations.
 
-# Generate a CLAUDE.md for your project
-npx alignkit init
-```
+**`alignkit watch`** — runs `check` in the background on an interval, building history automatically.
 
 ## Who it's for
 
@@ -56,28 +49,16 @@ alignkit is probably overkill if you:
 
 ## Why use this if Claude already has `CLAUDE.md Management`?
 
-Anthropic's official [`CLAUDE.md Management`](https://claude.com/plugins/claude-md-management) plugin is real and useful. It audits `CLAUDE.md` quality, captures learnings from a session, and proposes updates to memory files from inside Claude Code.
+Anthropic's official [`CLAUDE.md Management`](https://claude.com/plugins/claude-md-management) plugin audits quality, captures learnings, and proposes updates from inside Claude Code. If that's all you need, it may be enough.
 
-If that is all you need, it may already be enough.
+alignkit adds a different layer:
 
-alignkit is trying to add value at a different layer:
+- **History-backed adherence:** measures whether Claude actually followed your rules across real sessions, not just whether they sound good.
+- **Broader instruction surface:** analyzes scoped rules, agents, skills, `AGENTS.md`, and Cursor-style rule files — not just a single `CLAUDE.md`.
+- **Local and automatable:** CLI and MCP server with JSON output and CI support.
+- **Placement advice:** suggests where rules belong — global memory, scoped rule, skill, subagent, hook, or linter config.
 
-- **History-backed adherence:** `check` estimates whether Claude actually followed your rules across real sessions. The official plugin focuses on improving memory quality, not measuring instruction follow-through over time.
-- **Broader instruction surface:** alignkit linting is not limited to a single `CLAUDE.md`. It can analyze scoped rules, project agents, project skills, `AGENTS.md`, and Cursor-style rule files too.
-- **Local and automatable workflows:** alignkit works as a CLI and MCP server, supports JSON output, and can run in CI. That makes it easier to treat instruction quality like an engineering workflow rather than a one-off manual audit.
-- **Placement and structure advice:** alignkit tries to answer where an instruction belongs: global memory, scoped rule, skill, subagent, hook, or real tool config.
-
-What alignkit does **not** replace:
-
-- the official plugin's in-Claude revise flow
-- Claude-native memory editing workflows
-- Anthropic's own guidance on how memory, skills, and subagents should be structured
-
-The honest comparison is:
-
-- use the official plugin if you want Claude to help keep `CLAUDE.md` fresh from inside normal sessions
-- use alignkit if you want deeper static analysis, broader instruction-format coverage, or evidence about whether your instruction system is working in practice
-- use both if that fits your workflow
+Use the official plugin for in-Claude memory editing. Use alignkit if you want deeper static analysis, broader instruction-format coverage, or evidence about whether your instruction system is working in practice. Use both if that fits your workflow.
 
 ## What the output looks like
 
@@ -199,23 +180,6 @@ Found 14 sessions since then.
 
 Every row includes sample size, verification method, and a confidence estimate calibrated to evidence quality, consistency, and coverage.
 
-## Additional commands
-
-```bash
-# Quick pulse check from history
-alignkit status
-# → CLAUDE.md  78% adherence across 14 sessions  ▁▃▅▇▇ trending up
-
-# Trend analysis with recommendations
-alignkit report --days 30
-
-# Generate improved instruction file (never modifies original)
-alignkit optimize
-
-# Background daemon that builds history over time
-alignkit watch
-```
-
 ## MCP server
 
 alignkit includes an MCP server for Claude Code integration. When used as an MCP tool, Claude analyzes your instruction files directly — no separate API key needed, no additional cost beyond your normal Claude Code usage.
@@ -278,7 +242,6 @@ npx alignkit check --format json
 - **The auto-classifier still puts many rules in a catch-all "behavioral" bucket.** Rules with unusual phrasing or domain-specific language may not be classified correctly. This affects which verification strategy is used. `--deep` compensates for part of this.
 - **The parser is intentionally conservative.** It is much better with mixed instruction files than before, but prose-heavy workflow guidance can still be missed if it does not read clearly like an instruction.
 - **Token counting is approximate.** We use the GPT-4 tokenizer (`cl100k_base`), not Claude's. Counts may differ by up to ~20%.
-- **watch, report, and status need accumulated data to be useful.** They work correctly but produce thin output until you have multiple sessions. These features mature over time.
 - **Session-based features only work with Claude Code.** Cursor, Windsurf, and other agent session formats are not supported for check/watch/report/optimize. Lint works on all instruction file formats.
 
 ## Format support
@@ -304,6 +267,7 @@ npx alignkit check --format json
 | `init --deep` | Project metadata (directory names, dependency names, scripts). **Not** source code. |
 | `lint --deep` | Rule text + project metadata (directory names, dependency names). **Not** source code. |
 | `check --deep` | Rule text + session action summaries (commands run, files written). |
+| `optimize --deep` | Rule text + adherence data for LLM-powered consolidation. |
 
 All require `ANTHROPIC_API_KEY`. If you never set it, nothing ever leaves your machine.
 
