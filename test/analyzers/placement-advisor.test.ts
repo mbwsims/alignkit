@@ -50,7 +50,18 @@ describe('advisePlacement', () => {
     });
   });
 
-  it('recommends subagents for reusable multi-step task workflows', () => {
+  it('recommends skills for reusable multi-step task playbooks', () => {
+    const [result] = advisePlacement(
+      [makeRule('When explaining complex code, always include an analogy, a simple diagram, and a walkthrough of the execution path.')],
+      '/repo',
+    );
+
+    const diagnostic = result.diagnostics.find((d) => d.code === 'PLACEMENT');
+    expect(diagnostic?.placement?.target).toBe('skill');
+    expect(diagnostic?.message).toContain('.claude/skills/');
+  });
+
+  it('recommends subagents for specialized delegated workflows', () => {
     const [result] = advisePlacement(
       [makeRule('When debugging production issues, first capture logs, then isolate a minimal reproduction, then write a failing test, then apply the smallest safe fix.')],
       '/repo',
@@ -82,11 +93,11 @@ describe('advisePlacement', () => {
     expect(result.diagnostics.some((d) => d.code === 'PLACEMENT')).toBe(false);
   });
 
-  it('does not recommend hooks or subagents for rules already defined inside skills', () => {
+  it('does not recommend hooks, skills, or subagents for rules already defined inside skills', () => {
     const [result] = advisePlacement(
       [
         makeRule(
-          'When debugging production issues, first capture logs, then isolate a minimal reproduction, then write a failing test, then apply the smallest safe fix.',
+          'When explaining complex code, always include an analogy, a simple diagram, and a walkthrough of the execution path.',
           {
             source: {
               file: '/repo/.claude/skills/debug-workflow/SKILL.md',

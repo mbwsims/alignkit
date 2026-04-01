@@ -115,6 +115,15 @@ function computeQuickWins(
     );
   }
 
+  const skillPlacementCount = rules.filter((r) =>
+    r.diagnostics.some((d) => d.code === 'PLACEMENT' && d.placement?.target === 'skill'),
+  ).length;
+  if (skillPlacementCount > 0) {
+    wins.push(
+      `Move ${skillPlacementCount} reusable task workflow rule${skillPlacementCount > 1 ? 's' : ''} into .claude/skills/.`,
+    );
+  }
+
   const subagentPlacementCount = rules.filter((r) =>
     r.diagnostics.some((d) => d.code === 'PLACEMENT' && d.placement?.target === 'subagent'),
   ).length;

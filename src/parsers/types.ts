@@ -9,7 +9,7 @@ export type RuleCategory =
 export type Verifiability = 'auto' | 'user-config' | 'unverifiable';
 
 import type { RuleApplicability } from './rule-applicability.js';
-export type PlacementTarget = 'tool-config' | 'scoped-rule' | 'hook' | 'subagent';
+export type PlacementTarget = 'tool-config' | 'scoped-rule' | 'hook' | 'skill' | 'subagent';
 
 export interface PlacementSuggestion {
   target: PlacementTarget;

@@ -253,6 +253,7 @@ describe('lintTool', () => {
       [
         '- For `apps/web/**`, use React Server Components by default.',
         '- After every file edit, run eslint --fix on the changed file.',
+        '- When explaining complex code, always include an analogy, a simple diagram, and a walkthrough of the execution path.',
       ].join('\n'),
     );
 
@@ -264,7 +265,11 @@ describe('lintTool', () => {
     expect(result.rules.some((rule) =>
       rule.diagnostics.some((diagnostic) =>
         diagnostic.code === 'PLACEMENT' && diagnostic.placement?.target === 'hook'))).toBe(true);
+    expect(result.rules.some((rule) =>
+      rule.diagnostics.some((diagnostic) =>
+        diagnostic.code === 'PLACEMENT' && diagnostic.placement?.target === 'skill'))).toBe(true);
     expect(result.quickWins.some((win) => win.includes('.claude/rules'))).toBe(true);
     expect(result.quickWins.some((win) => win.includes('hooks'))).toBe(true);
+    expect(result.quickWins.some((win) => win.includes('.claude/skills'))).toBe(true);
   });
 });

@@ -169,6 +169,12 @@ export class TerminalReporter implements Reporter {
       quickWins.push(`Convert ${hookPlacement} deterministic automation rule${hookPlacement > 1 ? 's' : ''} into Claude hooks`);
     }
 
+    const skillPlacement = result.rules.flatMap((r) => r.diagnostics)
+      .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'skill').length;
+    if (skillPlacement > 0) {
+      quickWins.push(`Move ${skillPlacement} reusable task workflow rule${skillPlacement > 1 ? 's' : ''} into .claude/skills/`);
+    }
+
     const subagentPlacement = result.rules.flatMap((r) => r.diagnostics)
       .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'subagent').length;
     if (subagentPlacement > 0) {

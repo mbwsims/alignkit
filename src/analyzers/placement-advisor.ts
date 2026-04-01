@@ -15,6 +15,10 @@ interface ScopedRuleSuggestion {
   fragment: string;
 }
 
+interface SkillSuggestion {
+  task: string;
+}
+
 interface SubagentSuggestion {
   task: string;
 }
@@ -72,6 +76,14 @@ const SUBAGENT_TASK_KEYWORDS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\bmigration|migrate\b/i, label: 'migration' },
   { pattern: /\brefactor|refactoring\b/i, label: 'refactoring' },
   { pattern: /\bincident|triage|investigate\b/i, label: 'incident investigation' },
+];
+
+const SKILL_TASK_KEYWORDS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\bdeploy(?:ment|ing)?|release|ship(?:ping)?|publish(?:ing)?\b/i, label: 'deployment' },
+  { pattern: /\bexplain(?:ing)?|teach(?:ing)?|walk through|diagram\b/i, label: 'explanation' },
+  { pattern: /\bdocument(?:ation)?|write docs|summari[sz]e|release notes|changelog\b/i, label: 'documentation' },
+  { pattern: /\bgenerate|scaffold|bootstrap|template\b/i, label: 'generation' },
+  { pattern: /\bonboard(?:ing)?|handoff\b/i, label: 'onboarding' },
 ];
 
 function hasExistingPlacement(rule: Rule): boolean {
@@ -153,6 +165,42 @@ function countSequenceMarkers(text: string): number {
   ].filter((pattern) => pattern.test(text)).length;
 }
 
+function suggestSkill(rule: Rule, cwd?: string): SkillSuggestion | null {
+  if (
+    rule.applicability
+    || rule.text.length < 70
+    || !isGlobalInstructionSource(rule.source.file, cwd)
+    || isClaudeAgentFilePath(rule.source.file)
+    || isClaudeSkillFilePath(rule.source.file)
+  ) {
+    return null;
+  }
+
+  if (SUBAGENT_TASK_KEYWORDS.some(({ pattern }) => pattern.test(rule.text))) {
+    return null;
+  }
+
+  const task = SKILL_TASK_KEYWORDS.find(({ pattern }) => pattern.test(rule.text));
+  if (!task) {
+    return null;
+  }
+
+  const sequenceCount = countSequenceMarkers(rule.text);
+  const hasTaskLead =
+    /^(?:when|if|to)\b/i.test(rule.text)
+    || /^(?:deploy|release|ship|publish|explain|document|summari[sz]e|generate|scaffold|prepare|create|update|onboard|teach|walk through)\b/i.test(rule.text);
+  const hasPlaybookShape =
+    sequenceCount >= 2
+    || /\balways include\b/i.test(rule.text)
+    || /\b(?:workflow|playbook|steps?)\b/i.test(rule.text);
+
+  if (!hasTaskLead && !hasPlaybookShape) {
+    return null;
+  }
+
+  return { task: task.label };
+}
+
 function suggestSubagent(rule: Rule): SubagentSuggestion | null {
   if (
     rule.applicability
@@ -211,6 +259,24 @@ export function advisePlacement(rules: Rule[], cwd?: string): Rule[] {
       };
     }
 
+    const scopedRuleSuggestion = suggestScopedRule(rule, cwd);
+    if (scopedRuleSuggestion) {
+      return {
+        ...rule,
+        diagnostics: [
+          ...rule.diagnostics,
+          placementDiagnostic(
+            `This rule appears to target only part of the codebase (${scopedRuleSuggestion.fragment}). Move it into a path-scoped rule in .claude/rules/ instead of keeping it global.`,
+            {
+              target: 'scoped-rule',
+              confidence: 'high',
+              detail: scopedRuleSuggestion.fragment,
+            },
+          ),
+        ],
+      };
+    }
+
     const subagentSuggestion = suggestSubagent(rule);
     if (subagentSuggestion) {
       return {
@@ -229,18 +295,18 @@ export function advisePlacement(rules: Rule[], cwd?: string): Rule[] {
       };
     }
 
-    const scopedRuleSuggestion = suggestScopedRule(rule, cwd);
-    if (scopedRuleSuggestion) {
+    const skillSuggestion = suggestSkill(rule, cwd);
+    if (skillSuggestion) {
       return {
         ...rule,
         diagnostics: [
           ...rule.diagnostics,
           placementDiagnostic(
-            `This rule appears to target only part of the codebase (${scopedRuleSuggestion.fragment}). Move it into a path-scoped rule in .claude/rules/ instead of keeping it global.`,
+            `This rule describes a reusable ${skillSuggestion.task} playbook. Move it into a skill under .claude/skills/<name>/SKILL.md so Claude can load or invoke it when needed instead of keeping the whole workflow in global memory.`,
             {
-              target: 'scoped-rule',
+              target: 'skill',
               confidence: 'high',
-              detail: scopedRuleSuggestion.fragment,
+              detail: '.claude/skills/',
             },
           ),
         ],
