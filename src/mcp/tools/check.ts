@@ -1,16 +1,17 @@
-import { readFileSync, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { discoverInstructionFiles, parseInstructionFile } from '../../parsers/auto-detect.js';
+import { discoverInstructionTargets } from '../../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../../parsers/instruction-loader.js';
 import { readSessions } from '../../sessions/session-reader.js';
 import { verifySession } from '../../verifiers/verifier-engine.js';
+import { aggregateAdherence } from '../../check/adherence.js';
+import { ANALYSIS_VERSION } from '../../history/analysis-version.js';
 import { HistoryStore } from '../../history/store.js';
-import type { Observation } from '../../verifiers/types.js';
-import type { SerializedObservation, SessionResult } from '../../history/types.js';
+import { serializeObservation } from '../../verifiers/types.js';
+import type { SessionResult } from '../../history/types.js';
 import type { Rule } from '../../parsers/types.js';
 import type { AgentAction } from '../../sessions/types.js';
-
-const ANALYSIS_VERSION = '0.1.0';
 
 export interface CheckToolResult {
   file: string;
@@ -18,11 +19,15 @@ export interface CheckToolResult {
   rules: Array<{
     text: string;
     relevantSessions: number;
+    resolvedSessions: number;
+    inconclusiveSessions: number;
     totalSessions: number;
     followed: number;
     adherence: number | null;
     method: string;
     confidence: string;
+    confidenceReason: string;
+    evidence?: string;
   }>;
   unresolvedRules: Array<{
     text: string;
@@ -33,17 +38,6 @@ export interface CheckToolResult {
       editedFiles: string[];
     }>;
   }>;
-}
-
-function serializeObservation(obs: Observation): SerializedObservation {
-  return {
-    ruleId: obs.ruleId,
-    sessionId: obs.sessionId,
-    relevant: obs.relevant,
-    followed: obs.relevant ? obs.followed : null,
-    method: obs.method,
-    confidence: obs.confidence,
-  };
 }
 
 function getFileSince(filePath: string, cwd: string): Date {
@@ -63,6 +57,13 @@ function getFileSince(filePath: string, cwd: string): Date {
 
   const stat = statSync(filePath);
   return new Date(stat.mtimeMs);
+}
+
+function getGraphSince(filePaths: string[], cwd: string): Date {
+  return filePaths.reduce((latest, filePath) => {
+    const candidate = getFileSince(filePath, cwd);
+    return candidate.getTime() > latest.getTime() ? candidate : latest;
+  }, new Date(0));
 }
 
 function summarizeActions(actions: AgentAction[]): {
@@ -100,7 +101,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
     filePath = path.resolve(cwd, file);
     relPath = path.relative(cwd, filePath);
   } else {
-    const discovered = discoverInstructionFiles(cwd);
+    const discovered = discoverInstructionTargets(cwd);
     if (discovered.length === 0) {
       return {
         file: '(none)',
@@ -114,18 +115,18 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
   }
 
   // 2. Parse into rules
-  const content = readFileSync(filePath, 'utf-8');
-  const rules = parseInstructionFile(content, filePath);
+  const graph = loadEffectiveInstructionGraph(filePath, cwd);
+  const rules = graph.rules;
 
   // 3. Compute rulesVersion hash
-  const rulesVersion = HistoryStore.computeRulesVersion(filePath);
+  const rulesVersion = graph.graphHash;
 
   // 4. Determine since date
   let sinceDate: Date;
   if (sinceDays !== undefined) {
     sinceDate = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
   } else {
-    sinceDate = getFileSince(filePath, cwd);
+    sinceDate = getGraphSince(graph.loadedFiles, cwd);
   }
 
   // 5. Read sessions
@@ -139,11 +140,13 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
   const sessionActionsMap = new Map<string, { bashCommands: string[]; writtenFiles: string[]; editedFiles: string[] }>();
 
   for (const session of sessions) {
-    if (store.hasSession(session.sessionId)) {
+    sessionActionsMap.set(session.sessionId, summarizeActions(session.actions));
+
+    if (store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) {
       continue;
     }
 
-    const observations = verifySession(rules, session.actions, session.sessionId);
+    const observations = verifySession(rules, session.actions, session.sessionId, cwd);
 
     const result: SessionResult = {
       sessionId: session.sessionId,
@@ -154,55 +157,31 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
     };
 
     store.append(result);
-
-    // Store action summaries for later use
-    sessionActionsMap.set(session.sessionId, summarizeActions(session.actions));
   }
 
   // 7. Aggregate observations for current epoch
-  const allResults = store.queryByEpoch(rulesVersion);
+  const allResults = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
   // 8. Build per-rule adherence
-  const ruleResults = rules.map((rule) => {
-    let relevantCount = 0;
-    let followedCount = 0;
-    let topConfidence = 'low';
-    let topMethod = 'unmapped';
-
-    const confidenceRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
-
-    for (const result of allResults) {
-      for (const obs of result.observations) {
-        if (obs.ruleId !== rule.id) continue;
-        if (obs.relevant) {
-          relevantCount++;
-          if (obs.followed === true) {
-            followedCount++;
-          }
-          if ((confidenceRank[obs.confidence] ?? 0) > (confidenceRank[topConfidence] ?? 0)) {
-            topConfidence = obs.confidence;
-          }
-          topMethod = obs.method;
-        }
-      }
-    }
-
-    return {
-      text: rule.text,
-      relevantSessions: relevantCount,
-      totalSessions: allResults.length,
-      followed: followedCount,
-      adherence: relevantCount > 0 ? followedCount / relevantCount : null,
-      method: topMethod,
-      confidence: topConfidence,
-    };
-  });
+  const ruleResults = aggregateAdherence(rules, allResults).map((item) => ({
+    text: item.rule.text,
+    relevantSessions: item.relevantCount,
+    resolvedSessions: item.resolvedCount,
+    inconclusiveSessions: item.inconclusiveCount,
+    totalSessions: item.totalSessions,
+    followed: item.followedCount,
+    adherence: item.adherence,
+    method: item.method,
+    confidence: item.confidence,
+    confidenceReason: item.confidenceReason,
+    evidence: item.evidence,
+  }));
 
   // 9. Identify unresolved rules and attach session action summaries
   const unresolvedRules: CheckToolResult['unresolvedRules'] = [];
   for (const rule of rules) {
     const ruleResult = ruleResults.find((r) => r.text === rule.text);
-    if (ruleResult && ruleResult.method === 'unmapped') {
+    if (ruleResult && (ruleResult.method === 'unmapped' || (ruleResult.relevantSessions > 0 && ruleResult.resolvedSessions === 0))) {
       const sessionActions: CheckToolResult['unresolvedRules'][0]['sessionActions'] = [];
 
       // Use stored action summaries or gather from recent sessions

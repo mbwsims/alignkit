@@ -2,8 +2,18 @@ import path from 'node:path';
 import { globbySync } from 'globby';
 import type { Rule } from './types.js';
 import { parseClaudeMd } from './claude-md.js';
+import { parseClaudeRules } from './claude-rules.js';
+import { parseClaudeAgent } from './claude-agent.js';
+import { parseClaudeSkill } from './claude-skill.js';
 import { parseAgentsMd } from './agents-md.js';
 import { parseCursorrules } from './cursorrules.js';
+import {
+  isClaudeAgentFilePath,
+  isClaudeMemoryFilePath,
+  isClaudeRulesFilePath,
+  isClaudeSkillFilePath,
+  isCursorRulesFilePath,
+} from './instruction-paths.js';
 
 export interface DiscoveredFile {
   absolutePath: string;
@@ -15,9 +25,10 @@ const IGNORE_PATTERNS = ['**/node_modules/**', '**/dist/**', '**/.git/**', '**/.
 
 const ROOT_PRIORITY: Record<string, number> = {
   'CLAUDE.md': 0,
-  '.cursorrules': 1,
-  'AGENTS.md': 2,
-  'rules': 3, // .cursor/rules
+  'CLAUDE.local.md': 1,
+  '.cursorrules': 2,
+  'AGENTS.md': 3,
+  'rules': 4, // legacy .cursor/rules file
 };
 
 function getRootPriority(relativePath: string): number {
@@ -27,7 +38,19 @@ function getRootPriority(relativePath: string): number {
 }
 
 export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
-  const patterns = ['**/CLAUDE.md', '**/AGENTS.md', '**/.cursorrules', '**/.cursor/rules'];
+  const patterns = [
+    '**/CLAUDE.md',
+    '**/CLAUDE.local.md',
+    '**/.claude/rules/**/*.md',
+    '**/.claude/rules/**/*.mdc',
+    '**/.claude/agents/**/*.md',
+    '**/.claude/skills/**/SKILL.md',
+    '**/AGENTS.md',
+    '**/.cursorrules',
+    '**/.cursor/rules',
+    '**/.cursor/rules/**/*.md',
+    '**/.cursor/rules/**/*.mdc',
+  ];
 
   const found = globbySync(patterns, {
     cwd,
@@ -59,18 +82,79 @@ export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
   return files;
 }
 
-export function parseInstructionFile(content: string, filePath: string): Rule[] {
+function filterDiscoveredTargets(
+  discovered: DiscoveredFile[],
+  options: { includeAgentFiles?: boolean; includeSkillFiles?: boolean } = {},
+): DiscoveredFile[] {
+  const primaryClaudeFileByDir = new Map<string, string>();
+  const hasClaudeMemoryTargets = discovered.some((file) => isClaudeMemoryFilePath(file.absolutePath));
+
+  for (const file of discovered) {
+    if (!isClaudeMemoryFilePath(file.absolutePath)) continue;
+
+    const dirKey = path.dirname(file.relativePath);
+    const existing = primaryClaudeFileByDir.get(dirKey);
+
+    if (
+      existing === undefined ||
+      getRootPriority(file.relativePath) < getRootPriority(existing)
+    ) {
+      primaryClaudeFileByDir.set(dirKey, file.relativePath);
+    }
+  }
+
+  return discovered.filter((file) => {
+    if (isClaudeAgentFilePath(file.absolutePath)) {
+      return options.includeAgentFiles ?? false;
+    }
+    if (isClaudeSkillFilePath(file.absolutePath)) {
+      return options.includeSkillFiles ?? false;
+    }
+    if (hasClaudeMemoryTargets && isClaudeRulesFilePath(file.absolutePath)) {
+      return false;
+    }
+    if (!isClaudeMemoryFilePath(file.absolutePath)) return true;
+    const dirKey = path.dirname(file.relativePath);
+    return primaryClaudeFileByDir.get(dirKey) === file.relativePath;
+  });
+}
+
+export function discoverInstructionTargets(cwd: string): DiscoveredFile[] {
+  return filterDiscoveredTargets(discoverInstructionFiles(cwd));
+}
+
+export function discoverLintTargets(cwd: string): DiscoveredFile[] {
+  return filterDiscoveredTargets(discoverInstructionFiles(cwd), {
+    includeAgentFiles: true,
+    includeSkillFiles: true,
+  });
+}
+
+export function parseInstructionFile(content: string, filePath: string, cwd?: string): Rule[] {
   const basename = path.basename(filePath);
 
   switch (basename) {
     case 'CLAUDE.md':
+    case 'CLAUDE.local.md':
       return parseClaudeMd(content, filePath);
     case 'AGENTS.md':
       return parseAgentsMd(content, filePath);
     case '.cursorrules':
     case 'rules':
-      return parseCursorrules(content, filePath);
+      return parseCursorrules(content, filePath, cwd);
     default:
+      if (isClaudeAgentFilePath(filePath)) {
+        return parseClaudeAgent(content, filePath);
+      }
+      if (isClaudeSkillFilePath(filePath)) {
+        return parseClaudeSkill(content, filePath);
+      }
+      if (isClaudeRulesFilePath(filePath)) {
+        return parseClaudeRules(content, filePath, cwd);
+      }
+      if (isCursorRulesFilePath(filePath) || basename.endsWith('.mdc')) {
+        return parseCursorrules(content, filePath, cwd);
+      }
       return parseClaudeMd(content, filePath);
   }
 }

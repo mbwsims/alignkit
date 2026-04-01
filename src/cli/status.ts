@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Command } from 'commander';
-import { discoverInstructionFiles } from '../parsers/auto-detect.js';
+import { ANALYSIS_VERSION } from '../history/analysis-version.js';
+import { discoverInstructionTargets } from '../parsers/auto-detect.js';
 import { HistoryStore } from '../history/store.js';
 import type { SessionResult } from '../history/types.js';
 
@@ -105,13 +106,13 @@ export function computeStatus(
   }
 
   const totalRules = ruleStats.size;
-  let autoVerified = 0;
+  let fullyFollowed = 0;
   let consistentlyViolated = 0;
   let newRules = 0;
 
   for (const [, stat] of ruleStats) {
     if (stat.relevant > 0 && stat.followed === stat.relevant) {
-      autoVerified++;
+      fullyFollowed++;
     }
     if (stat.relevant > 0 && stat.followed / stat.relevant < 0.2) {
       consistentlyViolated++;
@@ -122,7 +123,7 @@ export function computeStatus(
   }
 
   const line1 = `${fileName}  ${overallPct}% adherence across ${sessions.length} sessions (${duration})  ${spark} ${trend}`;
-  const line2 = `  ${totalRules} rules tracked \u00B7 ${autoVerified} auto-verified \u00B7 ${consistentlyViolated} consistently violated \u00B7 ${newRules} new`;
+  const line2 = `  ${totalRules} rules tracked \u00B7 ${fullyFollowed} fully followed \u00B7 ${consistentlyViolated} consistently violated \u00B7 ${newRules} new`;
 
   return `${line1}\n${line2}`;
 }
@@ -142,7 +143,7 @@ export function registerStatusCommand(program: Command): void {
         filePath = path.resolve(cwd, file);
         fileName = path.basename(filePath);
       } else {
-        const discovered = discoverInstructionFiles(cwd);
+        const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
           console.error('Error: No instruction files found.');
           process.exit(1);
@@ -156,8 +157,8 @@ export function registerStatusCommand(program: Command): void {
       const store = new HistoryStore(alignkitDir);
 
       // 3. Get current epoch sessions
-      const rulesVersion = HistoryStore.computeRulesVersion(filePath);
-      const sessions = store.queryByEpoch(rulesVersion);
+      const rulesVersion = HistoryStore.computeRulesVersion(filePath, cwd);
+      const sessions = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
       // 4. Output status
       console.log(computeStatus(fileName, sessions));

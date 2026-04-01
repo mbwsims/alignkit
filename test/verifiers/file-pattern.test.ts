@@ -27,6 +27,7 @@ describe('verifyFilePattern', () => {
     const obs = verifyFilePattern(rule, actions, 'sess-1');
     expect(obs.relevant).toBe(true);
     expect(obs).toHaveProperty('followed', true);
+    expect(obs.evidence).toContain('src/__tests__/foo.test.ts');
   });
 
   it('"tests in __tests__/" + write to src/foo.test.ts => followed: false', () => {

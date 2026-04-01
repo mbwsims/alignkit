@@ -39,11 +39,15 @@ describe('checkTool', () => {
     for (const rule of result.rules) {
       expect(rule).toHaveProperty('text');
       expect(rule).toHaveProperty('relevantSessions');
+      expect(rule).toHaveProperty('resolvedSessions');
+      expect(rule).toHaveProperty('inconclusiveSessions');
       expect(rule).toHaveProperty('totalSessions');
       expect(rule).toHaveProperty('followed');
       expect(rule).toHaveProperty('adherence');
       expect(rule).toHaveProperty('method');
       expect(rule).toHaveProperty('confidence');
+      expect(rule).toHaveProperty('confidenceReason');
+      expect(rule).toHaveProperty('evidence');
     }
   });
 
@@ -80,6 +84,8 @@ describe('checkTool', () => {
 
     for (const rule of result.rules) {
       expect(rule.relevantSessions).toBe(0);
+      expect(rule.resolvedSessions).toBe(0);
+      expect(rule.inconclusiveSessions).toBe(0);
       expect(rule.followed).toBe(0);
       expect(rule.adherence).toBeNull();
     }

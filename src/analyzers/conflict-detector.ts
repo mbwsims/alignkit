@@ -1,4 +1,5 @@
 import type { Rule, Diagnostic } from '../parsers/types.js';
+import { rulesMayOverlap } from '../parsers/rule-applicability.js';
 
 const TOOL_GROUPS: string[][] = [
   ['pnpm', 'npm', 'yarn', 'bun'],
@@ -46,12 +47,16 @@ function hasSharedKeywords(textA: string, textB: string): boolean {
 
 /**
  * Extract the verb phrase after always/never/don't.
- * E.g., "Always show user feedback" → "show"
- *       "NEVER swallow errors" → "swallow"
+ * Captures the verb plus its object, stopping at a preposition boundary.
+ * E.g., "Always show user feedback for errors" → "show user feedback"
+ *       "Never run cleanup scripts on .superpowers/" → "run cleanup scripts"
+ *       "Always use semicolons" → "use semicolons"
  */
-function extractActionVerb(text: string): string | null {
-  const match = text.match(/\b(?:always|never|don'?t|do not)\s+(\w+)/i);
-  return match?.[1]?.toLowerCase() ?? null;
+function extractActionPhrase(text: string): string | null {
+  const match = text.match(
+    /\b(?:always|never|don'?t|do not)\s+((?:\w+(?:\s+\w+)*?))(?:\s+(?:for|on|with|without|before|after|in|at|to|from|when|while|unless|if|during|as)\b|[.,;!?]|$)/i,
+  );
+  return match?.[1]?.toLowerCase().trim() ?? null;
 }
 
 function isNegationConflict(textA: string, textB: string): boolean {
@@ -73,12 +78,12 @@ function isNegationConflict(textA: string, textB: string): boolean {
 
   if (!negationMatch) return false;
 
-  // Require that the action verb after always/never is the SAME word,
-  // not just any shared keyword. "Always show" vs "Never show" = conflict.
-  // "Always show" vs "Never swallow" = complementary, not a conflict.
-  const verbA = extractActionVerb(textA);
-  const verbB = extractActionVerb(textB);
-  if (verbA && verbB && verbA === verbB) return true;
+  // Require that the action phrase after always/never matches,
+  // not just any shared keyword. "Always run tests" vs "Never run tests" = conflict.
+  // "Always run brainstorming sessions" vs "Never run cleanup scripts" = not a conflict.
+  const phraseA = extractActionPhrase(textA);
+  const phraseB = extractActionPhrase(textB);
+  if (phraseA && phraseB && phraseA === phraseB) return true;
 
   // Fallback: if we can't extract verbs, check for high keyword overlap
   // (more than one shared meaningful word, suggesting the same topic AND action)
@@ -98,6 +103,10 @@ export function detectConflicts(rules: Rule[]): Rule[] {
     for (let j = i + 1; j < rules.length; j++) {
       const ruleA = rules[i];
       const ruleB = rules[j];
+
+      if (!rulesMayOverlap(ruleA, ruleB)) {
+        continue;
+      }
 
       let conflictReason: string | null = null;
 

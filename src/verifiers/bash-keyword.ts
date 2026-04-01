@@ -8,8 +8,13 @@ const TOOL_CATEGORIES: string[][] = [
   ['jest', 'mocha', 'vitest', 'ava'],
   ['git'],
   ['docker', 'podman'],
-  ['eslint', 'prettier', 'biome'],
+  ['eslint', 'prettier', 'biome', 'oxlint'],
   ['webpack', 'vite', 'turbopack', 'esbuild'],
+  ['playwright', 'cypress', 'puppeteer'],
+  ['turbo', 'nx', 'lerna'],
+  ['psql', 'mysql', 'sqlite3'],
+  ['typedoc', 'jsdoc'],
+  ['sass', 'less', 'postcss'],
 ];
 
 /** Individual tool keywords that can appear in bash commands. */
@@ -17,11 +22,19 @@ const KNOWN_TOOLS = [
   'pnpm', 'npm', 'yarn', 'bun', 'npx',
   'jest', 'mocha', 'vitest', 'ava', 'pytest',
   'git', 'docker', 'podman',
-  'eslint', 'prettier', 'biome',
+  'eslint', 'prettier', 'biome', 'oxlint', 'stylelint',
   'webpack', 'vite', 'turbopack', 'esbuild',
   'prisma', 'tsc', 'node', 'deno',
   'pip', 'cargo', 'go', 'make', 'brew', 'apt',
   'next', 'nuxt', 'remix',
+  'playwright', 'cypress', 'puppeteer',
+  'turbo', 'nx', 'lerna',
+  'terraform', 'kubectl', 'helm',
+  'psql', 'mysql', 'mongosh', 'redis-cli',
+  'storybook', 'tailwind', 'postcss',
+  'typedoc', 'jsdoc',
+  'commitlint', 'husky', 'lint-staged',
+  'curl', 'ssh', 'rsync',
 ];
 
 /**
@@ -63,6 +76,10 @@ function commandMentions(cmd: string, tool: string): boolean {
   return re.test(cmd);
 }
 
+function firstMatchingCommand(commands: string[], tool: string): string | null {
+  return commands.find((command) => commandMentions(command, tool)) ?? null;
+}
+
 export function verifyBashKeyword(
   rule: Rule,
   actions: AgentAction[],
@@ -76,18 +93,39 @@ export function verifyBashKeyword(
   if (useNot) {
     const preferredUsed = cmds.some((c) => commandMentions(c, useNot.preferred));
     const forbiddenUsed = cmds.some((c) => commandMentions(c, useNot.forbidden));
+    const preferredCommand = firstMatchingCommand(cmds, useNot.preferred);
+    const forbiddenCommand = firstMatchingCommand(cmds, useNot.forbidden);
 
     if (!preferredUsed && !forbiddenUsed) {
       // Check broader category relevance
       const cat = findCategory(useNot.preferred) ?? findCategory(useNot.forbidden);
       if (cat) {
         const anyCatUsed = cmds.some((c) => cat.some((t) => commandMentions(c, t)));
-        if (!anyCatUsed) return { ...base, relevant: false };
+        if (!anyCatUsed) {
+          return {
+            ...base,
+            relevant: false,
+            evidence: `No commands mentioning ${cat.join(', ')} were executed.`,
+          };
+        }
       }
-      return { ...base, relevant: false };
+      return {
+        ...base,
+        relevant: false,
+        evidence: `No commands mentioning ${useNot.preferred} or ${useNot.forbidden} were executed.`,
+      };
     }
 
-    return { ...base, relevant: true, followed: preferredUsed && !forbiddenUsed };
+    const evidenceParts: string[] = [];
+    if (preferredCommand) evidenceParts.push(`preferred: ${preferredCommand}`);
+    if (forbiddenCommand) evidenceParts.push(`forbidden: ${forbiddenCommand}`);
+
+    return {
+      ...base,
+      relevant: true,
+      followed: preferredUsed && !forbiddenUsed,
+      evidence: evidenceParts.join(' | '),
+    };
   }
 
   // --- Generic "use X" or mentions a single tool ---
@@ -98,10 +136,21 @@ export function verifyBashKeyword(
     for (const tool of cat) {
       if (lowerText.includes(tool)) {
         const anyCatUsed = cmds.some((c) => cat.some((t) => commandMentions(c, t)));
-        if (!anyCatUsed) return { ...base, relevant: false };
+        if (!anyCatUsed) {
+          return {
+            ...base,
+            relevant: false,
+            evidence: `No commands mentioning ${cat.join(', ')} were executed.`,
+          };
+        }
 
-        const toolUsed = cmds.some((c) => commandMentions(c, tool));
-        return { ...base, relevant: true, followed: toolUsed };
+        const toolCommand = firstMatchingCommand(cmds, tool);
+        return {
+          ...base,
+          relevant: true,
+          followed: toolCommand !== null,
+          evidence: toolCommand ?? `Commands used this tool category, but none mentioned ${tool}.`,
+        };
       }
     }
   }
@@ -110,13 +159,22 @@ export function verifyBashKeyword(
   // For these we can only verify "was this tool used?" not "was the right tool used?"
   for (const tool of KNOWN_TOOLS) {
     if (lowerText.includes(tool)) {
-      const toolUsed = cmds.some((c) => commandMentions(c, tool));
-      if (toolUsed) {
-        return { ...base, relevant: true, followed: true };
+      const toolCommand = firstMatchingCommand(cmds, tool);
+      if (toolCommand) {
+        return {
+          ...base,
+          relevant: true,
+          followed: true,
+          evidence: toolCommand,
+        };
       }
       // Tool mentioned in rule but not used — only relevant if session had related commands
       // (avoid marking as "violated" just because the tool wasn't needed in this session)
-      return { ...base, relevant: false };
+      return {
+        ...base,
+        relevant: false,
+        evidence: `No commands mentioning ${tool} were executed.`,
+      };
     }
   }
 
@@ -124,10 +182,16 @@ export function verifyBashKeyword(
   const backtickCmd = rule.text.match(/`([^`]+)`/);
   if (backtickCmd) {
     const cmdText = backtickCmd[1].trim().split(/\s+/)[0]; // first word
-    if (cmdText && cmds.some((c) => commandMentions(c, cmdText))) {
-      return { ...base, relevant: true, followed: true };
+    const command = cmdText ? firstMatchingCommand(cmds, cmdText) : null;
+    if (command) {
+      return {
+        ...base,
+        relevant: true,
+        followed: true,
+        evidence: command,
+      };
     }
   }
 
-  return { ...base, relevant: false };
+  return { ...base, relevant: false, evidence: 'No matching tool commands were detected.' };
 }

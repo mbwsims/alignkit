@@ -70,18 +70,29 @@ export function verifyFilePattern(
 
   const dirReq = extractDirRequirement(rule.text);
 
-  if (!dirReq) return { ...base, relevant: false };
+  if (!dirReq) return { ...base, relevant: false, evidence: 'No directory requirement could be extracted from the rule text.' };
 
   const paths = writeEditPaths(actions);
-  if (paths.length === 0) return { ...base, relevant: false };
+  if (paths.length === 0) return { ...base, relevant: false, evidence: 'No file write or edit actions were observed.' };
 
   // Directory-based rule (e.g., "tests in __tests__/")
   const ruleIsAboutTests =
     /\btest/i.test(rule.text) && (dirReq.includes('test') || dirReq.includes('spec'));
   const relevantPaths = ruleIsAboutTests ? paths.filter(isTestFile) : paths;
 
-  if (relevantPaths.length === 0) return { ...base, relevant: false };
+  if (relevantPaths.length === 0) {
+    return {
+      ...base,
+      relevant: false,
+      evidence: `Touched files did not match the relevant file subset for ${dirReq}.`,
+    };
+  }
 
   const allMatch = relevantPaths.every((p) => p.includes(dirReq));
-  return { ...base, relevant: true, followed: allMatch };
+  return {
+    ...base,
+    relevant: true,
+    followed: allMatch,
+    evidence: relevantPaths.slice(0, 5).join(', '),
+  };
 }

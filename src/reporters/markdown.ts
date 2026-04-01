@@ -19,6 +19,19 @@ export class MarkdownReporter implements Reporter {
     lines.push(`**${result.rules.length} rules**, ~${tokenStr} tokens`);
     lines.push('');
 
+    if (result.fileDiagnostics.length > 0) {
+      lines.push('## File Diagnostics');
+      lines.push('');
+      lines.push('| Severity | Code | Scope | Message |');
+      lines.push('|----------|------|-------|---------|');
+      for (const diagnostic of result.fileDiagnostics) {
+        const severity = diagnostic.severity === 'error' ? 'Error' : 'Warning';
+        const message = diagnostic.message.replace(/\|/g, '\\|');
+        lines.push(`| ${severity} | ${diagnostic.code} | (file) | ${message} |`);
+      }
+      lines.push('');
+    }
+
     // Diagnostics table if any
     const allDiagnostics = result.rules.flatMap((rule) =>
       rule.diagnostics.map((d) => ({ rule, d }))

@@ -7,12 +7,12 @@ import { statusTool } from './tools/status.js';
 
 const server = new McpServer({
   name: 'alignkit',
-  version: '0.1.2',
+  version: '0.1.4',
 });
 
 server.tool(
   'alignkit_lint',
-  'Analyze an instruction file (CLAUDE.md, .cursorrules) for structural issues. Returns rules, diagnostics, project context, and token analysis. Use the project context to provide effectiveness predictions and coverage gap analysis.',
+  'Analyze an instruction file (CLAUDE.md, .claude/agents/*.md, .claude/skills/*/SKILL.md, .cursorrules, and related formats) for structural issues. Returns rules, diagnostics, project context, and token analysis. Use the project context to provide effectiveness predictions and coverage gap analysis.',
   {
     file: z.string().optional().describe('Path to instruction file (auto-discovers if not provided)'),
   },

@@ -249,7 +249,7 @@ describe('readSessions', () => {
         timestamp: '2026-03-27T10:01:00.000Z',
         sessionId: 'sess-sub',
       });
-      writeFileSync(join(subagentDir, 'agent-abc123.jsonl'), subLine);
+      writeJsonlFile(subagentDir, 'agent-abc123.jsonl', [subLine], 5 * 60 * 1000);
 
       const sessions = readSessions({ cwd, claudeDir: tmpDir, includeSubagents: true });
       expect(sessions).toHaveLength(1);
@@ -278,12 +278,46 @@ describe('readSessions', () => {
         timestamp: '2026-03-27T10:01:00.000Z',
         sessionId: 'sess-sub',
       });
-      writeFileSync(join(subagentDir, 'agent-abc123.jsonl'), subLine);
+      writeJsonlFile(subagentDir, 'agent-abc123.jsonl', [subLine], 5 * 60 * 1000);
 
       const sessions = readSessions({ cwd, claudeDir: tmpDir, includeSubagents: false });
       expect(sessions).toHaveLength(1);
       expect(sessions[0].actions).toHaveLength(1);
       expect(sessions[0].actions[0].type).toBe('bash');
+    });
+
+    it('assigns subagent actions to the nearest parent session instead of all sessions', () => {
+      const projectDir = createProjectDir();
+      const earlyMain = makeAssistantLine({
+        toolName: 'Bash',
+        input: { command: 'echo early' },
+        timestamp: '2026-03-27T10:00:00.000Z',
+        sessionId: 'sess-early',
+      });
+      const lateMain = makeAssistantLine({
+        toolName: 'Bash',
+        input: { command: 'echo late' },
+        timestamp: '2026-03-27T11:00:00.000Z',
+        sessionId: 'sess-late',
+      });
+
+      writeJsonlFile(projectDir, 'sess-early.jsonl', [earlyMain], 10 * 60 * 1000);
+      writeJsonlFile(projectDir, 'sess-late.jsonl', [lateMain], 10 * 60 * 1000);
+
+      const subagentDir = join(projectDir, 'subagents');
+      mkdirSync(subagentDir, { recursive: true });
+      const subLine = makeAssistantLine({
+        toolName: 'Read',
+        input: { file_path: '/tmp/between.ts' },
+        timestamp: '2026-03-27T10:30:00.000Z',
+        sessionId: 'sess-sub',
+      });
+      writeJsonlFile(subagentDir, 'agent-between.jsonl', [subLine], 5 * 60 * 1000);
+
+      const sessions = readSessions({ cwd, claudeDir: tmpDir, includeSubagents: true });
+      expect(sessions).toHaveLength(2);
+      expect(sessions[0].actions.map((a) => a.type)).toEqual(['bash', 'read']);
+      expect(sessions[1].actions.map((a) => a.type)).toEqual(['bash']);
     });
   });
 

@@ -2,6 +2,7 @@ import pc from 'picocolors';
 import type { LintResult } from '../analyzers/types.js';
 import type { Reporter } from './types.js';
 import type { Rule } from '../parsers/types.js';
+import { autoMap } from '../verifiers/auto-mapper.js';
 
 const TRUNCATE_LEN = 60;
 
@@ -44,13 +45,26 @@ export class TerminalReporter implements Reporter {
     // Deep analysis results (EFFECTIVENESS, REWRITE, COVERAGE_GAP, CONSOLIDATION)
     // are shown in their own sections below
     const DEEP_CODES = new Set<string>(['EFFECTIVENESS', 'REWRITE', 'COVERAGE_GAP', 'CONSOLIDATION']);
+    const fileDiagnostics = result.fileDiagnostics.map((d) => ({ d }));
     const staticDiagnostics = result.rules.flatMap((rule) =>
       rule.diagnostics
         .filter((d) => !DEEP_CODES.has(d.code))
         .map((d) => ({ rule, d }))
     );
 
-    if (staticDiagnostics.length > 0) {
+    if (fileDiagnostics.length > 0 || staticDiagnostics.length > 0) {
+      for (const { d } of fileDiagnostics) {
+        const icon =
+          d.severity === 'error'
+            ? pc.red('✗')
+            : pc.yellow('⚠');
+        const code =
+          d.severity === 'error'
+            ? pc.red(d.code)
+            : pc.yellow(d.code);
+        lines.push(`  ${icon} ${code}  ${pc.dim('(file)')}`);
+        lines.push(`     ${d.message}`);
+      }
       for (const { rule, d } of staticDiagnostics) {
         const icon =
           d.severity === 'error'
@@ -68,12 +82,14 @@ export class TerminalReporter implements Reporter {
     }
 
     // Compute stats for HEALTH
-    const auto = result.rules.filter((r: Rule) => r.verifiability === 'auto').length;
+    const auto = result.rules.filter((r: Rule) => autoMap(r) !== null).length;
     const vague = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'VAGUE').length;
     const conflicting = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT').length;
     const redundant = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'REDUNDANT').length;
     const linterJob = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'LINTER_JOB').length;
+    const placement = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'PLACEMENT').length;
     const weakEmphasis = result.rules.flatMap((r) => r.diagnostics).filter((d) => d.code === 'WEAK_EMPHASIS').length;
+    const pathScoped = result.rules.filter((r) => r.applicability?.kind === 'path-scoped').length;
 
     // HEALTH summary — includes rule count with recommended ceiling
     const ruleCount = result.rules.length;
@@ -90,7 +106,9 @@ export class TerminalReporter implements Reporter {
     if (conflicting > 0) healthParts.push(`${conflicting} conflicting`);
     if (redundant > 0) healthParts.push(`${redundant} redundant`);
     if (linterJob > 0) healthParts.push(`${linterJob} linter-job`);
+    if (placement > 0) healthParts.push(`${placement} misplaced`);
     if (weakEmphasis > 0) healthParts.push(`${weakEmphasis} weak-emphasis`);
+    if (pathScoped > 0) healthParts.push(`${pathScoped} path-scoped`);
 
     lines.push(
       `${pc.bold('HEALTH')}  ${healthParts.join(', ')}`
@@ -137,6 +155,30 @@ export class TerminalReporter implements Reporter {
     // Linter-job rules
     if (linterJob > 0) {
       quickWins.push(`Move ${linterJob} formatting rule${linterJob > 1 ? 's' : ''} to linter/formatter config`);
+    }
+
+    const scopedRulePlacement = result.rules.flatMap((r) => r.diagnostics)
+      .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'scoped-rule').length;
+    if (scopedRulePlacement > 0) {
+      quickWins.push(`Move ${scopedRulePlacement} path-specific rule${scopedRulePlacement > 1 ? 's' : ''} into .claude/rules/`);
+    }
+
+    const hookPlacement = result.rules.flatMap((r) => r.diagnostics)
+      .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'hook').length;
+    if (hookPlacement > 0) {
+      quickWins.push(`Convert ${hookPlacement} deterministic automation rule${hookPlacement > 1 ? 's' : ''} into Claude hooks`);
+    }
+
+    const skillPlacement = result.rules.flatMap((r) => r.diagnostics)
+      .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'skill').length;
+    if (skillPlacement > 0) {
+      quickWins.push(`Move ${skillPlacement} reusable task workflow rule${skillPlacement > 1 ? 's' : ''} into .claude/skills/`);
+    }
+
+    const subagentPlacement = result.rules.flatMap((r) => r.diagnostics)
+      .filter((d) => d.code === 'PLACEMENT' && d.placement?.target === 'subagent').length;
+    if (subagentPlacement > 0) {
+      quickWins.push(`Move ${subagentPlacement} reusable workflow rule${subagentPlacement > 1 ? 's' : ''} into .claude/agents/`);
     }
 
     // Weak emphasis on critical rules

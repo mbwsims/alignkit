@@ -1,4 +1,5 @@
 import type { Rule, Diagnostic } from '../parsers/types.js';
+import { rulesMayOverlap } from '../parsers/rule-applicability.js';
 
 const STOP_WORDS = new Set([
   'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
@@ -39,6 +40,9 @@ export function detectDuplicates(rules: Rule[]): Rule[] {
 
   for (let i = 0; i < rules.length; i++) {
     for (let j = i + 1; j < rules.length; j++) {
+      if (!rulesMayOverlap(rules[i], rules[j])) {
+        continue;
+      }
       const similarity = jaccardSimilarity(tokenSets[i], tokenSets[j]);
       if (similarity >= JACCARD_THRESHOLD) {
         const diagI: Diagnostic = {

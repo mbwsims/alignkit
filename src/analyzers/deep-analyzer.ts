@@ -23,7 +23,7 @@ function buildPrompt(
   context: ReturnType<typeof collectProjectContext>,
   vagueRules: Rule[],
 ): string {
-  return `You are an expert at analyzing AI coding agent instruction files (CLAUDE.md, .cursorrules, etc.) for effectiveness. Your job is to help developers write better instructions that agents will actually follow.
+  return `You are an expert at analyzing AI coding agent instruction files (CLAUDE.md, .claude/agents/*.md, .cursorrules, etc.) for effectiveness. Your job is to help developers write better instructions that agents will actually follow.
 
 Analyze these rules against the project context and return JSON.
 

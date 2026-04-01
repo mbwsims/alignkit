@@ -5,27 +5,32 @@ import type { Observation } from './types.js';
 /** Code file extensions. */
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|rb)$/;
 
+interface ContentFile {
+  filePath: string;
+  content: string;
+}
+
 /** Extract content from Write and Edit actions on code files. */
-function codeWriteContents(actions: AgentAction[]): string[] {
-  const results: string[] = [];
+function codeWriteContents(actions: AgentAction[]): ContentFile[] {
+  const results: ContentFile[] = [];
   for (const a of actions) {
     if (a.type === 'write' && CODE_EXTENSIONS.test(a.filePath)) {
-      results.push(a.content);
+      results.push({ filePath: a.filePath, content: a.content });
     } else if (a.type === 'edit' && CODE_EXTENSIONS.test(a.filePath)) {
-      results.push(a.newContent);
+      results.push({ filePath: a.filePath, content: a.newContent });
     }
   }
   return results;
 }
 
 /** Extract content from Write actions that touch config files. */
-function configWriteContents(actions: AgentAction[]): string[] {
-  const results: string[] = [];
+function configWriteContents(actions: AgentAction[]): ContentFile[] {
+  const results: ContentFile[] = [];
   for (const a of actions) {
     if (a.type === 'write' && /tsconfig.*\.json$/.test(a.filePath)) {
-      results.push(a.content);
+      results.push({ filePath: a.filePath, content: a.content });
     } else if (a.type === 'edit' && /tsconfig.*\.json$/.test(a.filePath)) {
-      results.push(a.newContent);
+      results.push({ filePath: a.filePath, content: a.newContent });
     }
   }
   return results;
@@ -35,7 +40,11 @@ interface StructureCheck {
   /** Does the rule text match this check? */
   matches: (ruleText: string) => boolean;
   /** Run the heuristic against file contents. */
-  verify: (actions: AgentAction[]) => { relevant: boolean; followed: boolean | null };
+  verify: (actions: AgentAction[]) => {
+    relevant: boolean;
+    followed: boolean | null;
+    evidence?: string;
+  };
 }
 
 const CHECKS: StructureCheck[] = [
@@ -47,10 +56,18 @@ const CHECKS: StructureCheck[] = [
       /\bavoid\s+export\s+default/i.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
-      const hasDefault = contents.some((c) => /\bexport\s+default\b/.test(c));
-      return { relevant: true, followed: !hasDefault };
+      const defaultExportFile = contents.find((file) => /\bexport\s+default\b/.test(file.content));
+      return {
+        relevant: true,
+        followed: !defaultExportFile,
+        evidence: defaultExportFile
+          ? `${defaultExportFile.filePath} contains \`export default\`.`
+          : `Checked ${contents.length} code file(s); no default exports found.`,
+      };
     },
   },
   {
@@ -58,10 +75,18 @@ const CHECKS: StructureCheck[] = [
     matches: (t) => /\bstrict\s*(mode|:?\s*true)/i.test(t) || /\btypescript\s+strict/i.test(t),
     verify: (actions) => {
       const configs = configWriteContents(actions);
-      if (configs.length === 0) return { relevant: false, followed: null };
+      if (configs.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No tsconfig files were written or edited.' };
+      }
 
-      const hasStrict = configs.some((c) => /"strict"\s*:\s*true/.test(c));
-      return { relevant: true, followed: hasStrict };
+      const strictConfig = configs.find((file) => /"strict"\s*:\s*true/.test(file.content));
+      return {
+        relevant: true,
+        followed: strictConfig !== undefined,
+        evidence: strictConfig
+          ? `${strictConfig.filePath} sets \`"strict": true\`.`
+          : `Checked ${configs.length} tsconfig file(s); none enabled strict mode.`,
+      };
     },
   },
   {
@@ -69,10 +94,18 @@ const CHECKS: StructureCheck[] = [
     matches: (t) => /\basync\s*\/?\s*await/i.test(t) || /\bprefer\s+async/i.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
-      const hasAsync = contents.some((c) => /\basync\b/.test(c));
-      return { relevant: true, followed: hasAsync };
+      const asyncFile = contents.find((file) => /\basync\b/.test(file.content));
+      return {
+        relevant: true,
+        followed: asyncFile !== undefined,
+        evidence: asyncFile
+          ? `${asyncFile.filePath} contains \`async\`.`
+          : `Checked ${contents.length} code file(s); none used \`async\`.`,
+      };
     },
   },
   {
@@ -80,10 +113,18 @@ const CHECKS: StructureCheck[] = [
     matches: (t) => /\barrow\s+function/i.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
-      const hasArrow = contents.some((c) => /=>\s*[{(]/.test(c));
-      return { relevant: true, followed: hasArrow };
+      const arrowFile = contents.find((file) => /=>\s*[{(]/.test(file.content));
+      return {
+        relevant: true,
+        followed: arrowFile !== undefined,
+        evidence: arrowFile
+          ? `${arrowFile.filePath} contains an arrow function.`
+          : `Checked ${contents.length} code file(s); none contained arrow functions.`,
+      };
     },
   },
   {
@@ -91,10 +132,18 @@ const CHECKS: StructureCheck[] = [
     matches: (t) => /\bprefer\s+const/i.test(t) || /\buse\s+const/i.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
-      const hasLet = contents.some((c) => /\blet\s+\w/.test(c));
-      return { relevant: true, followed: !hasLet };
+      const letFile = contents.find((file) => /\blet\s+\w/.test(file.content));
+      return {
+        relevant: true,
+        followed: !letFile,
+        evidence: letFile
+          ? `${letFile.filePath} contains \`let\`.`
+          : `Checked ${contents.length} code file(s); no \`let\` declarations found.`,
+      };
     },
   },
   {
@@ -106,11 +155,19 @@ const CHECKS: StructureCheck[] = [
       /`unknown`.*`any`/i.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
       // Check for `: any`, `as any`, `<any>` patterns (not just the word "any")
-      const hasAny = contents.some((c) => /:\s*any\b|as\s+any\b|<any>/.test(c));
-      return { relevant: true, followed: !hasAny };
+      const anyFile = contents.find((file) => /:\s*any\b|as\s+any\b|<any>/.test(file.content));
+      return {
+        relevant: true,
+        followed: !anyFile,
+        evidence: anyFile
+          ? `${anyFile.filePath} contains an \`any\` type assertion or annotation.`
+          : `Checked ${contents.length} code file(s); no \`any\` usage detected.`,
+      };
     },
   },
   {
@@ -120,11 +177,19 @@ const CHECKS: StructureCheck[] = [
       /\bnested\s+conditional/i.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
       // Heuristic: deeply nested if/else blocks (3+ levels of indentation after if)
-      const deepNesting = contents.some((c) => /^\s{8,}(if|else)\b/m.test(c));
-      return { relevant: true, followed: !deepNesting };
+      const nestedFile = contents.find((file) => /^\s{8,}(if|else)\b/m.test(file.content));
+      return {
+        relevant: true,
+        followed: !nestedFile,
+        evidence: nestedFile
+          ? `${nestedFile.filePath} contains deeply nested conditionals.`
+          : `Checked ${contents.length} code file(s); no deep conditional nesting detected.`,
+      };
     },
   },
   {
@@ -134,14 +199,22 @@ const CHECKS: StructureCheck[] = [
       /\bempty\s+catch/i.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
       // Check for empty catch blocks: catch { } or catch(e) { }
-      const hasEmptyCatch = contents.some((c) =>
-        /catch\s*\([^)]*\)\s*\{\s*\}/s.test(c) ||
-        /catch\s*\{\s*\}/s.test(c)
+      const emptyCatchFile = contents.find((file) =>
+        /catch\s*\([^)]*\)\s*\{\s*\}/s.test(file.content) ||
+        /catch\s*\{\s*\}/s.test(file.content)
       );
-      return { relevant: true, followed: !hasEmptyCatch };
+      return {
+        relevant: true,
+        followed: !emptyCatchFile,
+        evidence: emptyCatchFile
+          ? `${emptyCatchFile.filePath} contains an empty catch block.`
+          : `Checked ${contents.length} code file(s); no empty catch blocks found.`,
+      };
     },
   },
   {
@@ -152,16 +225,24 @@ const CHECKS: StructureCheck[] = [
       /\b\.catch\b/.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
       // Check for error handling patterns in async code
-      const hasErrorHandling = contents.some((c) =>
-        /\.catch\s*\(/.test(c) ||
-        /onError\s*[=:]/.test(c) ||
-        /catch\s*\([^)]+\)\s*\{[^}]+\}/.test(c) ||
-        /try\s*\{/.test(c)
+      const errorHandlingFile = contents.find((file) =>
+        /\.catch\s*\(/.test(file.content) ||
+        /onError\s*[=:]/.test(file.content) ||
+        /catch\s*\([^)]+\)\s*\{[^}]+\}/.test(file.content) ||
+        /try\s*\{/.test(file.content)
       );
-      return { relevant: true, followed: hasErrorHandling };
+      return {
+        relevant: true,
+        followed: errorHandlingFile !== undefined,
+        evidence: errorHandlingFile
+          ? `${errorHandlingFile.filePath} contains explicit error handling.`
+          : `Checked ${contents.length} code file(s); no explicit error handling patterns found.`,
+      };
     },
   },
   {
@@ -171,14 +252,24 @@ const CHECKS: StructureCheck[] = [
       /\bprefer\s+`?interface/i.test(t),
     verify: (actions) => {
       const contents = codeWriteContents(actions);
-      if (contents.length === 0) return { relevant: false, followed: null };
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
 
-      const hasInterface = contents.some((c) => /\binterface\s+\w+/m.test(c));
-      const hasTypeAlias = contents.some((c) => /\btype\s+\w+\s*=/m.test(c));
+      const interfaceFile = contents.find((file) => /\binterface\s+\w+/m.test(file.content));
+      const typeAliasFile = contents.find((file) => /\btype\s+\w+\s*=/m.test(file.content));
       // If both exist, that's fine (spec says except unions/intersections)
       // Only flag if type aliases exist but no interfaces
-      if (!hasInterface && !hasTypeAlias) return { relevant: false, followed: null };
-      return { relevant: true, followed: hasInterface };
+      if (!interfaceFile && !typeAliasFile) {
+        return { relevant: false, followed: null, evidence: 'No interface or type alias declarations were written.' };
+      }
+      return {
+        relevant: true,
+        followed: interfaceFile !== undefined,
+        evidence: interfaceFile
+          ? `${interfaceFile.filePath} contains an interface declaration.`
+          : `${typeAliasFile?.filePath} contains a type alias without an interface declaration.`,
+      };
     },
   },
   {
@@ -187,24 +278,104 @@ const CHECKS: StructureCheck[] = [
       /\bfactory\s+pattern/i.test(t) ||
       /getMock\w*\(/i.test(t),
     verify: (actions) => {
-      const contents = codeWriteContents(actions);
       // Only relevant for test files
-      const testContents = actions
-        .filter((a): a is Extract<AgentAction, { type: 'write' }> =>
-          a.type === 'write' && /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(a.filePath))
-        .map((a) => a.content);
-      if (testContents.length === 0) return { relevant: false, followed: null };
-
-      const hasFactory = testContents.some((c) =>
-        /\bgetMock\w*\s*\(/.test(c) ||
-        /\bcreate\w*Mock\s*\(/.test(c) ||
-        /\bbuild\w*\s*\(.*override/i.test(c) ||
-        /factory/i.test(c)
+      const testContents = codeWriteContents(actions).filter((file) =>
+        /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(file.filePath),
       );
-      return { relevant: true, followed: hasFactory };
+      if (testContents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No test files were written or edited.' };
+      }
+
+      const factoryFile = testContents.find((file) =>
+        /\bgetMock\w*\s*\(/.test(file.content) ||
+        /\bcreate\w*Mock\s*\(/.test(file.content) ||
+        /\bbuild\w*\s*\(.*override/i.test(file.content) ||
+        /factory/i.test(file.content)
+      );
+      return {
+        relevant: true,
+        followed: factoryFile !== undefined,
+        evidence: factoryFile
+          ? `${factoryFile.filePath} contains a mock factory pattern.`
+          : `Checked ${testContents.length} test file(s); no factory helper patterns found.`,
+      };
+    },
+  },
+  // --- JSDoc / documentation comments ---
+  {
+    matches: (t) =>
+      /\bjsdoc\b/i.test(t) ||
+      /\bdocument\s+(?:all\s+)?(?:functions?|methods?|classes?|exports?)/i.test(t) ||
+      /\badd\s+(?:jsdoc|doc)\s+comments?/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions);
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
+      const jsdocFile = contents.find((file) => /\/\*\*[\s\S]*?\*\//.test(file.content));
+      return {
+        relevant: true,
+        followed: jsdocFile !== undefined,
+        evidence: jsdocFile
+          ? `${jsdocFile.filePath} contains JSDoc comments.`
+          : `Checked ${contents.length} code file(s); no JSDoc comments found.`,
+      };
+    },
+  },
+  // --- Explicit return types ---
+  {
+    matches: (t) =>
+      /\bexplicit\s+return\s+type/i.test(t) ||
+      /\breturn\s+type\s+annotation/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions).filter(
+        (file) => /\.(ts|tsx)$/.test(file.filePath),
+      );
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No TypeScript files were written or edited.' };
+      }
+      const missingReturnType = contents.find((file) =>
+        /export\s+(?:async\s+)?function\s+\w+\s*\([^)]*\)\s*\{/.test(file.content),
+      );
+      return {
+        relevant: true,
+        followed: !missingReturnType,
+        evidence: missingReturnType
+          ? `${missingReturnType.filePath} has an exported function without an explicit return type.`
+          : `Checked ${contents.length} TypeScript file(s); all exported functions have return type annotations.`,
+      };
+    },
+  },
+  // --- Barrel exports / index files ---
+  {
+    matches: (t) =>
+      /\bbarrel\s+export/i.test(t) ||
+      /\bindex\s+file/i.test(t) ||
+      /\bre-?export/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions).filter(
+        (file) => /\/index\.(ts|js)$/.test(file.filePath),
+      );
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No index files were written or edited.' };
+      }
+      const barrelFile = contents.find((file) =>
+        /\bexport\s+\{/.test(file.content) || /\bexport\s+\*\s+from/.test(file.content),
+      );
+      return {
+        relevant: true,
+        followed: barrelFile !== undefined,
+        evidence: barrelFile
+          ? `${barrelFile.filePath} contains re-exports.`
+          : `Checked ${contents.length} index file(s); no barrel export patterns found.`,
+      };
     },
   },
 ];
+
+export function matchesHeuristicStructureRule(text: string): boolean {
+  return CHECKS.some((check) => check.matches(text));
+}
 
 export function verifyHeuristicStructure(
   rule: Rule,
@@ -221,10 +392,10 @@ export function verifyHeuristicStructure(
   for (const check of CHECKS) {
     if (check.matches(rule.text)) {
       const result = check.verify(actions);
-      if (!result.relevant) return { ...base, relevant: false };
-      return { ...base, relevant: true, followed: result.followed };
+      if (!result.relevant) return { ...base, relevant: false, evidence: result.evidence };
+      return { ...base, relevant: true, followed: result.followed, evidence: result.evidence };
     }
   }
 
-  return { ...base, relevant: false };
+  return { ...base, relevant: false, evidence: 'No heuristic structure check matched this rule.' };
 }

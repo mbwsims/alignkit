@@ -53,4 +53,61 @@ describe('detectConflicts', () => {
     detectConflicts(rules);
     expect(JSON.stringify(rules)).toBe(original);
   });
+
+  it('does NOT flag rules with same verb but different objects', () => {
+    const rules = [
+      makeRule('Always run brainstorming sessions before making significant architectural changes'),
+      makeRule('Never run cleanup scripts on .superpowers/ without backing up session data first'),
+    ];
+    const result = detectConflicts(rules);
+    const conflicts = result.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT');
+    expect(conflicts).toHaveLength(0);
+  });
+
+  it('does NOT flag rules with same verb but different direct objects', () => {
+    const rules = [
+      makeRule('Always write documentation before merging'),
+      makeRule('Never write production code without tests'),
+    ];
+    const result = detectConflicts(rules);
+    const conflicts = result.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT');
+    expect(conflicts).toHaveLength(0);
+  });
+
+  it('still flags rules with same verb AND same object', () => {
+    const rules = [
+      makeRule('Always run tests before committing'),
+      makeRule('Never run tests before committing'),
+    ];
+    const result = detectConflicts(rules);
+    const conflicts = result.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT');
+    expect(conflicts.length).toBeGreaterThan(0);
+  });
+
+  it('does not flag conflicts across non-overlapping path scopes', () => {
+    const rules = [
+      {
+        ...makeRule('Use pnpm for packages'),
+        applicability: {
+          kind: 'path-scoped' as const,
+          patterns: ['frontend/**'],
+          baseDir: '/repo',
+          source: 'claude-paths' as const,
+        },
+      },
+      {
+        ...makeRule('Use npm for packages'),
+        applicability: {
+          kind: 'path-scoped' as const,
+          patterns: ['backend/**'],
+          baseDir: '/repo',
+          source: 'claude-paths' as const,
+        },
+      },
+    ];
+
+    const result = detectConflicts(rules);
+    const conflicts = result.flatMap((r) => r.diagnostics).filter((d) => d.code === 'CONFLICT');
+    expect(conflicts).toHaveLength(0);
+  });
 });

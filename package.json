@@ -1,6 +1,6 @@
 {
   "name": "alignkit",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Instruction intelligence for coding agents",
   "type": "module",
   "bin": {
@@ -20,12 +20,21 @@
   "keywords": [
     "ai",
     "agent",
-    "lint",
     "claude",
+    "claude-code",
     "cursor",
-    "instruction"
+    "mcp",
+    "instruction",
+    "rules",
+    "lint",
+    "agents-md",
+    "developer-tools"
   ],
   "license": "MIT",
+  "homepage": "https://github.com/mbwsims/alignkit#readme",
+  "bugs": {
+    "url": "https://github.com/mbwsims/alignkit/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/mbwsims/alignkit"

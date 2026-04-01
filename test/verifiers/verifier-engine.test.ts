@@ -40,6 +40,18 @@ describe('autoMap', () => {
     expect(fn).not.toBeNull();
   });
 
+  it('maps rules mentioning a known tool to bash-keyword', () => {
+    const rule = makeRule('Use Prisma for all data access', { category: 'tool-constraint' });
+    const fn = autoMap(rule);
+    expect(fn).not.toBeNull();
+  });
+
+  it('does not auto-map rules with no tool or command signals', () => {
+    const rule = makeRule('Keep functions small and focused', { category: 'tool-constraint' });
+    const fn = autoMap(rule);
+    expect(fn).toBeNull();
+  });
+
   it('returns null for unverifiable rules', () => {
     const rule = makeRule('be creative', { verifiability: 'unverifiable' });
     const fn = autoMap(rule);
@@ -78,6 +90,7 @@ describe('verifySession', () => {
     expect(results[0].method).toBe('auto:bash-keyword');
     expect(results[0].relevant).toBe(true);
     expect(results[0]).toHaveProperty('followed', true);
+    expect(results[0]).toHaveProperty('evidence');
   });
 
   it('handles mixed rule types in a single session', () => {
@@ -110,5 +123,33 @@ describe('verifySession', () => {
     const results = verifySession(rules, actions, 'my-session');
     expect(results[0].ruleId).toBe('rule-git');
     expect(results[0].sessionId).toBe('my-session');
+  });
+
+  it('marks path-scoped rules irrelevant when the session never touches matching files', () => {
+    const rules = [
+      makeRule('use pnpm not npm', {
+        id: 'r-scoped',
+        applicability: {
+          kind: 'path-scoped',
+          patterns: ['frontend/**'],
+          baseDir: '/repo',
+          source: 'claude-paths',
+        },
+      }),
+    ];
+    const actions: AgentAction[] = [
+      {
+        type: 'edit',
+        filePath: '/repo/backend/service.ts',
+        oldContent: '',
+        newContent: '',
+        timestamp: '2026-01-01T00:00:00Z',
+      },
+      bash('pnpm install'),
+    ];
+
+    const results = verifySession(rules, actions, 'sess-1', '/repo');
+    expect(results[0].relevant).toBe(false);
+    expect(results[0].method).toBe('scope:filtered');
   });
 });

@@ -8,6 +8,7 @@ export type Observation =
       relevant: false;
       method: VerificationMethod;
       confidence: ObservationConfidence;
+      evidence?: string;
     }
   | {
       ruleId: string;
@@ -16,6 +17,7 @@ export type Observation =
       followed: boolean | null;
       method: VerificationMethod;
       confidence: ObservationConfidence;
+      evidence?: string;
     };
 
 export type VerificationMethod =
@@ -23,6 +25,7 @@ export type VerificationMethod =
   | 'auto:bash-sequence'
   | 'auto:file-pattern'
   | 'auto:heuristic-structure'
+  | 'scope:filtered'
   | 'user:custom'
   | 'llm-judge'
   | 'unmapped';
@@ -34,3 +37,18 @@ export type VerifierFunction = (
   actions: AgentAction[],
   sessionId: string,
 ) => Observation;
+
+/**
+ * Serialize an Observation into a format suitable for history storage.
+ */
+export function serializeObservation(obs: Observation): import('../history/types.js').SerializedObservation {
+  return {
+    ruleId: obs.ruleId,
+    sessionId: obs.sessionId,
+    relevant: obs.relevant,
+    followed: obs.relevant ? obs.followed : null,
+    method: obs.method,
+    confidence: obs.confidence,
+    evidence: obs.evidence,
+  };
+}

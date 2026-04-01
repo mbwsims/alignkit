@@ -7,8 +7,8 @@ import {
   unlinkSync,
   statSync,
 } from 'node:fs';
-import { join } from 'node:path';
-import { createHash } from 'node:crypto';
+import path, { join } from 'node:path';
+import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import type { SessionResult } from './types.js';
 
 const HISTORY_FILE = 'history.jsonl';
@@ -42,9 +42,18 @@ export class HistoryStore {
   }
 
   /** Check if a session is already recorded. */
-  hasSession(sessionId: string): boolean {
+  hasSession(
+    sessionId: string,
+    rulesVersion?: string,
+    analysisVersion?: string,
+  ): boolean {
     const results = this.readAll();
-    return results.some((r) => r.sessionId === sessionId);
+    return results.some(
+      (r) =>
+        r.sessionId === sessionId &&
+        (rulesVersion === undefined || r.rulesVersion === rulesVersion) &&
+        (analysisVersion === undefined || r.analysisVersion === analysisVersion),
+    );
   }
 
   /** Append a session result (with dedup check and lockfile). */
@@ -54,7 +63,13 @@ export class HistoryStore {
 
     try {
       // Dedup check inside lock
-      if (this.hasSession(result.sessionId)) {
+      if (
+        this.hasSession(
+          result.sessionId,
+          result.rulesVersion,
+          result.analysisVersion,
+        )
+      ) {
         return;
       }
 
@@ -65,22 +80,36 @@ export class HistoryStore {
   }
 
   /** Get the current rules version hash. */
-  static computeRulesVersion(filePath: string): string {
-    const content = readFileSync(filePath, 'utf-8');
-    const hash = createHash('sha256').update(content).digest('hex');
-    return hash.slice(0, 12);
+  static computeRulesVersion(filePath: string, cwd?: string): string {
+    const boundaryCwd = cwd ?? path.dirname(path.resolve(filePath));
+    return loadEffectiveInstructionGraph(filePath, boundaryCwd).graphHash;
   }
 
   /** Remove a session from history (for --fresh re-analysis). */
-  removeSession(sessionId: string): void {
-    const results = this.readAll().filter((r) => r.sessionId !== sessionId);
+  removeSession(
+    sessionId: string,
+    rulesVersion?: string,
+    analysisVersion?: string,
+  ): void {
+    const results = this.readAll().filter(
+      (r) =>
+        !(
+          r.sessionId === sessionId &&
+          (rulesVersion === undefined || r.rulesVersion === rulesVersion) &&
+          (analysisVersion === undefined || r.analysisVersion === analysisVersion)
+        ),
+    );
     this.ensureDir();
     writeFileSync(this.historyPath, results.map((r) => JSON.stringify(r)).join('\n') + (results.length > 0 ? '\n' : ''), 'utf-8');
   }
 
   /** Get all sessions for a specific rules version (epoch). */
-  queryByEpoch(rulesVersion: string): SessionResult[] {
-    return this.readAll().filter((r) => r.rulesVersion === rulesVersion);
+  queryByEpoch(rulesVersion: string, analysisVersion?: string): SessionResult[] {
+    return this.readAll().filter(
+      (r) =>
+        r.rulesVersion === rulesVersion &&
+        (analysisVersion === undefined || r.analysisVersion === analysisVersion),
+    );
   }
 
   private ensureDir(): void {

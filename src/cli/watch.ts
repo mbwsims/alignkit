@@ -1,35 +1,18 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { Command } from 'commander';
-import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
+import { discoverInstructionTargets } from '../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
+import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { HistoryStore } from '../history/store.js';
-import type { Observation } from '../verifiers/types.js';
-import type { SerializedObservation, SessionResult } from '../history/types.js';
-
-const ANALYSIS_VERSION = '0.1.0';
-
-function serializeObservation(obs: Observation): SerializedObservation {
-  return {
-    ruleId: obs.ruleId,
-    sessionId: obs.sessionId,
-    relevant: obs.relevant,
-    followed: obs.relevant ? obs.followed : null,
-    method: obs.method,
-    confidence: obs.confidence,
-  };
-}
+import { serializeObservation } from '../verifiers/types.js';
+import type { SessionResult } from '../history/types.js';
 
 function formatTime(): string {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-}
-
-function hashFile(filePath: string): string {
-  const content = readFileSync(filePath, 'utf-8');
-  return createHash('sha256').update(content).digest('hex').slice(0, 12);
 }
 
 /**
@@ -108,7 +91,7 @@ export function registerWatchCommand(program: Command): void {
       if (file) {
         filePath = path.resolve(cwd, file);
       } else {
-        const discovered = discoverInstructionFiles(cwd);
+        const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
           console.error('Error: No instruction files found.');
           process.exit(1);
@@ -117,10 +100,10 @@ export function registerWatchCommand(program: Command): void {
       }
 
       // 2. Parse rules and compute version
-      const content = readFileSync(filePath, 'utf-8');
-      let rules = parseInstructionFile(content, filePath);
-      let rulesVersion = HistoryStore.computeRulesVersion(filePath);
-      let fileHash = hashFile(filePath);
+      let graph = loadEffectiveInstructionGraph(filePath, cwd);
+      let rules = graph.rules;
+      let rulesVersion = graph.graphHash;
+      let fileHash = graph.graphHash;
 
       // 3. Resolve alignkit directory
       const alignkitDir = path.join(cwd, '.alignkit');
@@ -160,12 +143,13 @@ export function registerWatchCommand(program: Command): void {
       const poll = (): void => {
         try {
           // Check if instruction file changed
-          const currentHash = hashFile(filePath);
+          const currentGraph = loadEffectiveInstructionGraph(filePath, cwd);
+          const currentHash = currentGraph.graphHash;
           if (currentHash !== fileHash) {
             fileHash = currentHash;
-            const newContent = readFileSync(filePath, 'utf-8');
-            rules = parseInstructionFile(newContent, filePath);
-            rulesVersion = HistoryStore.computeRulesVersion(filePath);
+            graph = currentGraph;
+            rules = currentGraph.rules;
+            rulesVersion = currentGraph.graphHash;
             if (!options.quiet) {
               console.log(`[${formatTime()}] Instruction file changed — new tracking epoch`);
             }
@@ -177,9 +161,9 @@ export function registerWatchCommand(program: Command): void {
           const sessions = readSessions({ cwd, since });
 
           for (const session of sessions) {
-            if (store.hasSession(session.sessionId)) continue;
+            if (store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) continue;
 
-            const observations = verifySession(rules, session.actions, session.sessionId);
+            const observations = verifySession(rules, session.actions, session.sessionId, cwd);
             const result: SessionResult = {
               sessionId: session.sessionId,
               timestamp: session.timestamp,

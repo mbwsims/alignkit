@@ -27,6 +27,12 @@ interface SessionEntry {
   modified: string;
 }
 
+interface ParsedSession {
+  sessionId: string;
+  actions: AgentAction[];
+  timestamp: string;
+}
+
 /**
  * Read and parse Claude Code sessions for a given project directory.
  */
@@ -80,18 +86,10 @@ export function readSessions(options: ReadSessionsOptions): SessionData[] {
       const stat = statSync(entry.fullPath);
       if (now - stat.mtimeMs < ACTIVE_SESSION_THRESHOLD_MS) continue;
 
-      const actions = parseSessionFile(entry.fullPath);
-
-      // Merge subagent actions if requested
-      if (includeSubagents) {
-        const subagentActions = readSubagentActions(projectDir);
-        actions.push(...subagentActions);
-      }
-
       seen.add(entry.sessionId);
       sessions.push({
         sessionId: entry.sessionId,
-        actions,
+        actions: parseSessionFile(entry.fullPath),
         timestamp: entry.modified,
       });
     }
@@ -130,12 +128,6 @@ export function readSessions(options: ReadSessionsOptions): SessionData[] {
           ? actions[0].timestamp
           : new Date(stat.mtimeMs).toISOString();
 
-      // Merge subagent actions if requested
-      if (includeSubagents) {
-        const subagentActions = readSubagentActions(projectDir);
-        actions.push(...subagentActions);
-      }
-
       seen.add(sessionId);
       sessions.push({
         sessionId,
@@ -147,6 +139,10 @@ export function readSessions(options: ReadSessionsOptions): SessionData[] {
 
   // Sort by timestamp ascending
   sessions.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  if (includeSubagents && sessions.length > 0) {
+    attachSubagentActions(projectDir, sessions, since, now);
+  }
 
   return sessions;
 }
@@ -167,14 +163,61 @@ function extractSessionId(filePath: string): string | null {
   }
 }
 
+function attachSubagentActions(
+  projectDir: string,
+  sessions: SessionData[],
+  since: Date | undefined,
+  now: number,
+): void {
+  const subagentSessions = readSubagentSessions(projectDir, since, now);
+  if (subagentSessions.length === 0) return;
+
+  for (const subagent of subagentSessions) {
+    const targetIndex = findOwningSessionIndex(sessions, subagent.timestamp);
+    if (targetIndex === -1) continue;
+    sessions[targetIndex].actions.push(...subagent.actions);
+  }
+}
+
+function findOwningSessionIndex(
+  sessions: SessionData[],
+  subagentTimestamp: string,
+): number {
+  if (sessions.length === 0) return -1;
+  if (sessions.length === 1) return 0;
+
+  const subagentTime = Date.parse(subagentTimestamp);
+  if (Number.isNaN(subagentTime)) {
+    return sessions.length - 1;
+  }
+
+  for (let i = 0; i < sessions.length; i++) {
+    const currentTime = Date.parse(sessions[i].timestamp);
+    const nextTime = i < sessions.length - 1 ? Date.parse(sessions[i + 1].timestamp) : Number.POSITIVE_INFINITY;
+
+    const isAfterCurrent = Number.isNaN(currentTime) || subagentTime >= currentTime;
+    const isBeforeNext = Number.isNaN(nextTime) || subagentTime < nextTime;
+
+    if (isAfterCurrent && isBeforeNext) {
+      return i;
+    }
+  }
+
+  return subagentTime < Date.parse(sessions[0].timestamp) ? 0 : sessions.length - 1;
+}
+
 /**
- * Read all subagent JSONL files from the subagents/ directory.
+ * Read subagent JSONL files as independent transcripts.
  */
-function readSubagentActions(projectDir: string): AgentAction[] {
+function readSubagentSessions(
+  projectDir: string,
+  since: Date | undefined,
+  now: number,
+): ParsedSession[] {
   const subagentsDir = join(projectDir, 'subagents');
   if (!existsSync(subagentsDir)) return [];
 
-  const actions: AgentAction[] = [];
+  const sessions: ParsedSession[] = [];
 
   try {
     const files = readdirSync(subagentsDir).filter(
@@ -183,11 +226,27 @@ function readSubagentActions(projectDir: string): AgentAction[] {
 
     for (const file of files) {
       const filePath = join(subagentsDir, file);
-      actions.push(...parseSessionFile(filePath));
+      const stat = statSync(filePath);
+
+      if (now - stat.mtimeMs < ACTIVE_SESSION_THRESHOLD_MS) continue;
+      if (since && stat.mtimeMs <= since.getTime()) continue;
+
+      const actions = parseSessionFile(filePath);
+      const timestamp =
+        actions.length > 0
+          ? actions[0].timestamp
+          : new Date(stat.mtimeMs).toISOString();
+
+      sessions.push({
+        sessionId: basename(filePath, '.jsonl'),
+        actions,
+        timestamp,
+      });
     }
   } catch {
     // Ignore errors reading subagent files
   }
 
-  return actions;
+  sessions.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  return sessions;
 }

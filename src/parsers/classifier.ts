@@ -4,12 +4,12 @@ const PATTERNS: Array<{ category: RuleCategory; pattern: RegExp }> = [
   {
     category: 'tool-constraint',
     pattern:
-      /\b(pnpm|npm|yarn|bun|npx|pip|brew|apt|cargo|go |make|git|docker|pytest|jest|vitest|mocha|eslint|prettier|biome|webpack|vite|turbo|nx|prisma|next|tsc|node)\b/i,
+      /\b(pnpm|npm|yarn|bun|npx|pip|brew|apt|cargo|go |make|git|docker|podman|pytest|jest|vitest|mocha|eslint|prettier|biome|oxlint|stylelint|webpack|vite|turbo|nx|prisma|next|nuxt|remix|tsc|node|deno|playwright|cypress|terraform|kubectl|tailwind|storybook|commitlint|husky|typedoc|jsdoc|psql|mysql|mongosh|curl|ssh)\b/i,
   },
   {
     category: 'code-structure',
     pattern:
-      /\b(named exports?|default exports?|imports?|interfaces?|class(?:es)?|async|await|strict mode|module|function|const|let|var|enum|namespace|generics?|abstraction|CommonJS|ESM|arrow function|spread operator|early returns?|nested conditionals?|composition|inheritance|factory pattern|error handl|catch\b|onError|swallow.*errors?)\b|`any`|`unknown`|`type`|`interface`/i,
+      /\b(named exports?|default exports?|imports?|interfaces?|class(?:es)?|async|await|strict mode|module|function|const|let|var|enum|namespace|generics?|abstraction|CommonJS|ESM|arrow function|spread operator|early returns?|nested conditionals?|composition|inheritance|factory pattern|error handl|catch\b|onError|swallow.*errors?|jsdoc|barrel\s+export|re-?export|index\s+file|return\s+type|explicit\s+return)\b|`any`|`unknown`|`type`|`interface`/i,
   },
   {
     category: 'process-ordering',

@@ -227,6 +227,7 @@ describe('llm-judge', () => {
         followed: true,
         method: 'llm-judge',
         confidence: 'medium',
+        evidence: 'Used pnpm',
       });
     });
 
@@ -249,6 +250,7 @@ describe('llm-judge', () => {
         relevant: false,
         method: 'llm-judge',
         confidence: 'medium',
+        evidence: 'No relevant actions',
       });
     });
 
@@ -312,6 +314,7 @@ describe('llm-judge', () => {
         followed: true,
         method: 'llm-judge',
         confidence: 'medium',
+        evidence: 'Used pnpm install command',
       });
     });
 

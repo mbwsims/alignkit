@@ -126,4 +126,115 @@ describe('parseMarkdown', () => {
       ).toBe(true);
     });
   });
+
+  describe('documentation-heavy markdown', () => {
+    it('does not treat README product copy and tables as rules', () => {
+      const content = `# Tool
+
+This tool helps you understand your rules.
+
+## What it does
+
+**\`lint\`** finds structural issues and suggests improvements.
+
+| Command | Description |
+|---|---|
+| \`alignkit lint\` | Analyze instructions |
+
+## Rules
+
+- Always run tests before committing.
+- Use pnpm, not npm.
+`;
+
+      const rules = parseMarkdown(content, 'README.md');
+      const texts = rules.map((r) => r.text);
+
+      expect(texts).toEqual([
+        'Always run tests before committing.',
+        'Use pnpm, not npm.',
+      ]);
+    });
+  });
+
+  describe('event-driven instructions', () => {
+    it('treats after/before directives as normative rules', () => {
+      const content = [
+        '- After every file edit, run eslint --fix on the changed file.',
+        '- Before modifying production config, ask for confirmation.',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+      const texts = rules.map((rule) => rule.text);
+
+      expect(texts).toContain('After every file edit, run eslint --fix on the changed file.');
+      expect(texts).toContain('Before modifying production config, ask for confirmation.');
+    });
+  });
+
+  describe('workflow-style instructions', () => {
+    it('treats conditional playbook sentences as normative rules', () => {
+      const content = [
+        '- When explaining complex code, first start with an analogy, then draw a simple diagram, then walk through the execution path.',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+      const texts = rules.map((rule) => rule.text);
+
+      expect(texts).toContain(
+        'When explaining complex code, first start with an analogy, then draw a simple diagram, then walk through the execution path.',
+      );
+    });
+
+    it('treats always-include playbooks with indented steps as a single rule', () => {
+      const content = [
+        '- When explaining code, always include:',
+        '  1. Start with an analogy.',
+        '  2. Draw a simple diagram.',
+        '  3. Walk through the execution path.',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+
+      expect(rules).toHaveLength(1);
+      expect(rules[0].text).toBe(
+        'When explaining code, always include: 1. Start with an analogy. 2. Draw a simple diagram. 3. Walk through the execution path.',
+      );
+    });
+  });
+
+  describe('parser hardening', () => {
+    it('preserves multi-line list items as a single rule', () => {
+      const content = [
+        '## Rules',
+        '',
+        '- Always run tests before committing,',
+        '  especially after changing migrations or generated files.',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+
+      expect(rules).toHaveLength(1);
+      expect(rules[0].text).toBe(
+        'Always run tests before committing, especially after changing migrations or generated files.',
+      );
+      expect(rules[0].source.lineStart).toBe(3);
+      expect(rules[0].source.lineEnd).toBe(4);
+    });
+
+    it('ignores checklist items and metadata labels inside normative sections', () => {
+      const content = [
+        '## Rules',
+        '',
+        '- [ ] Add CI checks',
+        '- **Framework:** Next.js 16',
+        '- TypeScript strict mode',
+      ].join('\n');
+
+      const rules = parseMarkdown(content, 'CLAUDE.md');
+      const texts = rules.map((rule) => rule.text);
+
+      expect(texts).toEqual(['TypeScript strict mode']);
+    });
+  });
 });

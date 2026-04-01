@@ -14,4 +14,5 @@ export interface SerializedObservation {
   followed: boolean | null;
   method: string;
   confidence: string;
+  evidence?: string;
 }

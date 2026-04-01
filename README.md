@@ -2,7 +2,9 @@
 
 Instruction intelligence for coding agents.
 
-You write a CLAUDE.md to control how AI coding agents work in your codebase. But you have no way to know if your rules are well-structured, if the agent actually follows them, or which rules are wasting tokens. alignkit gives you that visibility.
+You write a `CLAUDE.md` to shape how coding agents behave in your codebase. But you have no easy way to know whether those rules are well-structured, whether the agent actually follows them, or which rules are wasting tokens. alignkit gives you that visibility.
+
+alignkit is currently in beta. It is optimized for Claude Code projects, with broader lint support for related instruction formats such as `AGENTS.md`, `.cursor/rules`, `.claude/agents`, and `.claude/skills`.
 
 ```bash
 npx alignkit
@@ -10,19 +12,22 @@ npx alignkit
 
 ## What it does
 
-**`init`** don't have a CLAUDE.md yet? This generates a starter one for your project. Detects your stack (framework, test runner, database, styling, package manager) and assembles rules from templates. With `--deep`, uses an LLM for a more tailored result.
+**`check`** reads Claude Code session history and estimates whether each rule was actually followed. It separates relevant sessions from resolved and inconclusive evidence, surfaces supporting evidence, and shows which rules were never exercised at all. With `--deep`, it uses an LLM to evaluate rules that pattern matching cannot judge reliably.
 
-**`lint`** finds problems in your instruction files before the agent ever sees them — vague rules, contradictions, redundancies, stale version references, poor ordering, formatting rules that belong in a linter, and critical rules that use weak language.
+**`lint`** finds problems in your instruction files before the agent ever sees them — vague rules, contradictions, redundancies, stale version references, poor ordering, formatting rules that belong in a linter, critical rules that use weak language, and rules that belong in scoped files, skills, hooks, or subagents instead of global memory.
 
 **`lint --deep`** uses an LLM to go further: predicts which rules the agent is likely to ignore, flags rules Claude already knows from reading code, identifies important behaviors your rules don't cover, and suggests how to consolidate related rules into fewer, stronger ones.
 
-**`check`** reads your Claude Code session history and measures whether each rule was actually followed. With `--deep`, it uses an LLM to evaluate rules that can't be verified by pattern matching alone — going from ~25% rule coverage to ~85%.
+**`init`** generates a starter `CLAUDE.md` for your project if you do not have one yet. It detects your stack (framework, test runner, database, styling, package manager) and assembles rules from templates. With `--deep`, it uses an LLM for a more tailored result.
 
 ## Quick start
 
 ```bash
-# Generate a CLAUDE.md for your project
-npx alignkit init
+# Check which rules your agent actually follows
+npx alignkit check
+
+# Check with LLM evaluation for rules pattern matching can't cover
+npx alignkit check --deep
 
 # Analyze your instruction file (zero config, free)
 npx alignkit
@@ -30,18 +35,55 @@ npx alignkit
 # LLM-powered deep analysis (~$0.05, requires ANTHROPIC_API_KEY)
 npx alignkit lint --deep
 
-# Check which rules your agent actually follows
-npx alignkit check
-
-# Check with LLM evaluation for rules pattern matching can't cover
-npx alignkit check --deep
+# Generate a CLAUDE.md for your project
+npx alignkit init
 ```
+
+## Who it's for
+
+alignkit is most useful if you:
+
+- use Claude Code seriously enough that instruction quality affects real work
+- want to know whether your rules are actually being followed, not just whether they sound good
+- keep instruction logic in more than one place (`CLAUDE.md`, scoped rules, agents, skills, `AGENTS.md`, `.cursor/rules`)
+- want local CLI/MCP tooling, machine-readable output, or CI checks instead of a purely in-Claude workflow
+
+alignkit is probably overkill if you:
+
+- only need a starter `CLAUDE.md` and nothing beyond that
+- only need occasional in-Claude auditing and memory cleanup
+- do not care about history-backed adherence or structured lint output
+
+## Why use this if Claude already has `CLAUDE.md Management`?
+
+Anthropic's official [`CLAUDE.md Management`](https://claude.com/plugins/claude-md-management) plugin is real and useful. It audits `CLAUDE.md` quality, captures learnings from a session, and proposes updates to memory files from inside Claude Code.
+
+If that is all you need, it may already be enough.
+
+alignkit is trying to add value at a different layer:
+
+- **History-backed adherence:** `check` estimates whether Claude actually followed your rules across real sessions. The official plugin focuses on improving memory quality, not measuring instruction follow-through over time.
+- **Broader instruction surface:** alignkit linting is not limited to a single `CLAUDE.md`. It can analyze scoped rules, project agents, project skills, `AGENTS.md`, and Cursor-style rule files too.
+- **Local and automatable workflows:** alignkit works as a CLI and MCP server, supports JSON output, and can run in CI. That makes it easier to treat instruction quality like an engineering workflow rather than a one-off manual audit.
+- **Placement and structure advice:** alignkit tries to answer where an instruction belongs: global memory, scoped rule, skill, subagent, hook, or real tool config.
+
+What alignkit does **not** replace:
+
+- the official plugin's in-Claude revise flow
+- Claude-native memory editing workflows
+- Anthropic's own guidance on how memory, skills, and subagents should be structured
+
+The honest comparison is:
+
+- use the official plugin if you want Claude to help keep `CLAUDE.md` fresh from inside normal sessions
+- use alignkit if you want deeper static analysis, broader instruction-format coverage, or evidence about whether your instruction system is working in practice
+- use both if that fits your workflow
 
 ## What the output looks like
 
 ### `alignkit init`
 
-Detects your stack and generates a CLAUDE.md.
+Detects your stack and generates a `CLAUDE.md`.
 
 ```
 $ alignkit init
@@ -74,7 +116,7 @@ Generated CLAUDE.md
 
 ### `alignkit lint`
 
-Finds structural issues — no API key needed, runs instantly.
+Finds structural issues. No API key needed, and it runs instantly.
 
 ```
 CLAUDE.md — 34 rules, ~1,200 tokens (estimated)
@@ -109,7 +151,7 @@ QUICK WINS
 
 ### `alignkit lint --deep`
 
-Everything above, plus LLM-powered analysis of your rules against your project structure. Flags rules Claude already knows from reading code — these waste instruction budget.
+Everything above, plus LLM-powered analysis of your rules against your project structure. It flags rules Claude already knows from reading code, which waste instruction budget.
 
 ```
 EFFECTIVENESS PREDICTIONS
@@ -138,22 +180,24 @@ CONSOLIDATION
 
 ### `alignkit check --deep`
 
-Measures per-rule adherence from your Claude Code session history. `--deep` uses an LLM to evaluate rules that pattern matching can't cover.
+Measures per-rule adherence from your Claude Code session history. `--deep` uses an LLM to evaluate rules that pattern matching cannot cover.
 
 ```
 CLAUDE.md last modified: 5 days ago
 Found 14 sessions since then.
 
- "Use pnpm, not npm"                     9/9       100% ✓    high    auto:bash-keyword
- "Run tests before committing"           12/14      86% ✓    medium  auto:bash-sequence
- "TypeScript strict mode"                14/14     100% ✓    medium  llm-judge
- "Prisma for all data access"            11/14      79% ~    medium  llm-judge
- "Add JSDoc to public functions"          2/7       29% ✗    medium  llm-judge
+ Rule                                    Sessions  Resolved  Followed  Adherence  Confidence  Method
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────
+ "Use pnpm, not npm"                     9/14      9/9       9/9       100% ✓     high        auto:bash-keyword
+ "Run tests before committing"           12/14     12/12     10/12      83% ~     medium      auto:bash-sequence
+ "TypeScript strict mode"                14/14     9/14      9/9       100% ✓     medium      llm-judge
+ "Prisma for all data access"            11/14     7/11       5/7        71% ✗     low         llm-judge
+ "Add JSDoc to public functions"          7/14      0/7       -          ?         low         llm-judge
 
- 5 rules verified · 2 unverifiable
+ 2 rules auto-evaluated · 3 rules LLM-evaluated · 1 inconclusive
 ```
 
-Every number includes sample size, verification method, and confidence level.
+Every row includes sample size, verification method, and a confidence estimate calibrated to evidence quality, consistency, and coverage.
 
 ## Additional commands
 
@@ -201,17 +245,17 @@ npx alignkit lint --format json
 npx alignkit check --format json
 ```
 
-`--ci` returns exit code 1 when diagnostics are found. Without `--ci`, lint always exits 0.
+`--ci` returns exit code 1 when diagnostics are found. Without `--ci`, `lint` always exits 0.
 
 ## How it works
 
-**Init** detects your project's stack (package manager, framework, language, test runner, database, styling, linter, monorepo) and assembles rules from templates. With `--deep`, sends project metadata to the Anthropic API for a more tailored result.
+**Init** detects your project's stack (package manager, framework, language, test runner, database, styling, linter, monorepo) and assembles rules from templates. With `--deep`, it sends project metadata to the Anthropic API for a more tailored result.
 
-**Lint** parses your instruction file into individual rules, classifies each by type (tool-constraint, code-structure, process-ordering, style-guidance, behavioral), and runs eight deterministic checks: vague language detection, near-duplicate detection, conflict detection, version reference flagging, ordering analysis, linter-job detection (rules that belong in eslint/prettier), weak emphasis detection (critical rules using "should" instead of "MUST"), and token/rule counting.
+**Lint** parses your instruction files into individual rules, classifies each by type (tool-constraint, code-structure, process-ordering, style-guidance, behavioral), and runs deterministic checks for vague language, near-duplicates, conflicts, version references, ordering, linter-job detection (rules that belong in eslint/prettier), weak emphasis, placement, and token/rule counting.
 
 **Lint --deep** sends rule text and project metadata (directory names, dependency names — not source code) to the Anthropic API for effectiveness prediction (including flagging rules Claude already knows), coverage gap analysis, and consolidation suggestions.
 
-**Check** reads Claude Code session logs from `~/.claude/projects/`, extracts tool_use actions (Bash commands, file writes, edits, reads), and verifies each rule using pattern-matching strategies:
+**Check** reads Claude Code session logs from `~/.claude/projects/`, extracts tool-use actions (Bash commands, file writes, edits, reads), and verifies each rule using pattern-matching strategies:
 
 | Strategy | What it checks | Confidence |
 |---|---|---|
@@ -220,31 +264,41 @@ npx alignkit check --format json
 | `file-pattern` | File paths in Write/Edit actions | High |
 | `heuristic-structure` | Code patterns via regex | Medium |
 
-**Check --deep** sends unresolved rules + session action summaries to the LLM for evaluation, covering rules that pattern matching can't handle.
+`check` aggregates those observations into per-rule adherence, separating:
+- relevant sessions
+- resolved sessions with concrete pass/fail evidence
+- inconclusive sessions where the rule mattered but evidence was insufficient
+- out-of-scope sessions where the rule did not apply
+
+**Check --deep** sends unresolved rules + session action summaries to the LLM for evaluation, covering rules that pattern matching cannot handle well on their own.
 
 ## Current strengths
 
-- **lint works well across a broad range of instruction files.** Finds real issues on real files. Tested against files from 6 to 387 lines.
-- **lint --deep often produces genuinely useful insights.** Coverage gap analysis correctly identifies missing rules based on your project's actual dependencies and directory structure. Consolidation suggestions produce real token savings with concrete merged text.
-- **check --deep dramatically improves coverage.** Pattern matching alone covers ~25% of rules in a typical CLAUDE.md. With LLM evaluation, coverage jumps to ~85%. The LLM correctly evaluates rules like "TypeScript strict mode" and "Agent configs are data, not imperative code" that regex can't touch.
-- **Transparent about confidence.** Every adherence number shows its sample size, verification method, and confidence level. No numbers without context.
+- **`check` is the most differentiated part of the product.** It does more than lint rule text: it estimates whether Claude actually followed your instructions in real sessions.
+- **`lint` covers a wider instruction surface than a single `CLAUDE.md`.** It now understands effective Claude memory, scoped rules, subagents, and project skills.
+- **Placement advice reflects the modern Claude workflow model.** alignkit can flag when a rule belongs in scoped memory, a skill, a hook, a subagent, or actual tool config instead of global memory.
+- **Adherence reporting is intentionally explicit.** Every rule shows sample size, method, and confidence, and unresolved or inconclusive rules are surfaced instead of being quietly treated as verified.
 
 ## Current limitations
 
-- **The auto-classifier puts many rules in a catch-all "behavioral" bucket.** Rules with unusual phrasing or domain-specific language may not be classified correctly. This affects which verification strategy is used. `--deep` compensates for this.
-- **The parser extracts some documentation as rules.** Instruction files that mix documentation heavily with directives (architecture descriptions, command references) may have inflated rule counts. The parser filters out code fences, bold-prefixed descriptions, and command references, but some noise remains.
+- **`check` is still an evidence system, not an enforcement system.** It can tell you what likely happened in observed sessions, but it cannot prove compliance in the abstract.
+- **The auto-classifier still puts many rules in a catch-all "behavioral" bucket.** Rules with unusual phrasing or domain-specific language may not be classified correctly. This affects which verification strategy is used. `--deep` compensates for part of this.
+- **The parser is intentionally conservative.** It is much better with mixed instruction files than before, but prose-heavy workflow guidance can still be missed if it does not read clearly like an instruction.
 - **Token counting is approximate.** We use the GPT-4 tokenizer (`cl100k_base`), not Claude's. Counts may differ by up to ~20%.
 - **watch, report, and status need accumulated data to be useful.** They work correctly but produce thin output until you have multiple sessions. These features mature over time.
 - **Session-based features only work with Claude Code.** Cursor, Windsurf, and other agent session formats are not supported for check/watch/report/optimize. Lint works on all instruction file formats.
 
 ## Format support
 
-| Format | lint | lint --deep | check / watch / report / optimize |
+| Format | init | lint | check |
 |---|---|---|---|
 | CLAUDE.md | Yes | Yes | Yes (Claude Code sessions) |
-| AGENTS.md | Yes | Yes | Yes (Claude Code sessions) |
-| .cursorrules | Yes | Yes | Not yet |
-| .cursor/rules | Yes | Yes | Not yet |
+| .claude/rules | — | Yes | Yes (Claude Code sessions) |
+| .claude/agents/*.md | — | Yes | Yes (explicit file, Claude Code sessions) |
+| .claude/skills/*/SKILL.md | — | Yes | — |
+| AGENTS.md | — | Yes | Yes (Claude Code sessions) |
+| .cursorrules | — | Yes | Not yet |
+| .cursor/rules | — | Yes | Not yet |
 
 ## Privacy
 
@@ -271,13 +325,7 @@ Optional. Everything works with zero configuration.
 {
   "instructionFile": "./CLAUDE.md",
   "thresholds": { "tokenBudget": 2000, "flagBelow": 20 },
-  "contextWindow": 200000,
-  "rules": {
-    "always-add-error-handling": {
-      "verifier": "custom",
-      "check": "grep:catch|try|\\.catch in write:src/routes/**"
-    }
-  }
+  "contextWindow": 200000
 }
 ```
 

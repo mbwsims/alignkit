@@ -8,6 +8,7 @@ function makeLintResult(overrides?: Partial<LintResult>): LintResult {
   return {
     file: 'CLAUDE.md',
     rules: [],
+    fileDiagnostics: [],
     tokenAnalysis: {
       tokenCount: 500,
       contextWindowPercent: 2.5,
@@ -77,6 +78,16 @@ describe('JsonReporter', () => {
     const result = makeLintResult({ discoveredFiles });
     const output = JSON.parse(reporter.report(result));
     expect(output.discoveredFiles).toEqual(discoveredFiles);
+  });
+
+  it('includes fileDiagnostics', () => {
+    const reporter = new JsonReporter();
+    const fileDiagnostics = [
+      { severity: 'error', code: 'METADATA', message: 'Missing required `description` in subagent frontmatter.' },
+    ];
+    const result = makeLintResult({ fileDiagnostics });
+    const output = JSON.parse(reporter.report(result));
+    expect(output.fileDiagnostics).toEqual(fileDiagnostics);
   });
 
   it('includes rules array with mapped fields', () => {

@@ -1,14 +1,16 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Command } from 'commander';
 import { loadConfig } from '../config/loader.js';
-import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
+import { discoverInstructionFiles, discoverLintTargets } from '../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { detectVague } from '../analyzers/vague-detector.js';
 import { detectDuplicates } from '../analyzers/duplicate-detector.js';
 import { detectConflicts } from '../analyzers/conflict-detector.js';
 import { flagVersions } from '../analyzers/version-flagger.js';
 import { analyzeOrdering } from '../analyzers/ordering-analyzer.js';
 import { detectLinterRules } from '../analyzers/linter-rule-detector.js';
+import { advisePlacement } from '../analyzers/placement-advisor.js';
+import { validateInstructionMetadata } from '../analyzers/instruction-metadata-validator.js';
 import { detectWeakEmphasis } from '../analyzers/emphasis-detector.js';
 import { analyzeTokens } from '../analyzers/token-counter.js';
 import { analyzeDeep } from '../analyzers/deep-analyzer.js';
@@ -42,8 +44,8 @@ export function registerLintCommand(program: Command): void {
           console.error('Error: No instruction files found.');
           process.exit(1);
         }
-        // Analyze all discovered files
-        filesToAnalyze = discovered.map((f) => f.absolutePath);
+        // Analyze each effective target once
+        filesToAnalyze = discoverLintTargets(cwd).map((f) => f.absolutePath);
       }
 
       // Select reporter
@@ -63,16 +65,8 @@ export function registerLintCommand(program: Command): void {
       const results: LintResult[] = [];
 
       for (const filePath of filesToAnalyze) {
-        let content: string;
-        try {
-          content = readFileSync(filePath, 'utf-8');
-        } catch (err) {
-          console.error(`Error: Cannot read file "${filePath}".`);
-          process.exit(1);
-        }
-
-        // Parse
-        let rules = parseInstructionFile(content, filePath);
+        let rules = loadEffectiveInstructionGraph(filePath, cwd).rules;
+        const fileDiagnostics = validateInstructionMetadata(filePath, rules);
 
         // Run all analyzers in sequence
         rules = detectVague(rules);
@@ -81,6 +75,7 @@ export function registerLintCommand(program: Command): void {
         rules = flagVersions(rules);
         rules = analyzeOrdering(rules);
         rules = detectLinterRules(rules);
+        rules = advisePlacement(rules, cwd);
         rules = detectWeakEmphasis(rules);
 
         // Token analysis
@@ -95,6 +90,7 @@ export function registerLintCommand(program: Command): void {
         const result: LintResult = {
           file: relPath,
           rules,
+          fileDiagnostics,
           tokenAnalysis,
           discoveredFiles: discoveredPaths,
         };
@@ -121,7 +117,9 @@ export function registerLintCommand(program: Command): void {
       // CI mode: exit with non-zero code if any issues found
       if (options.ci) {
         const totalDiags = results.reduce(
-          (sum, r) => sum + r.rules.reduce((s, rule) => s + rule.diagnostics.length, 0),
+          (sum, r) => sum
+            + r.fileDiagnostics.length
+            + r.rules.reduce((s, rule) => s + rule.diagnostics.length, 0),
           0,
         );
         if (totalDiags > 0) {

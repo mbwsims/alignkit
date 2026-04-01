@@ -7,11 +7,19 @@ export function analyzeOrdering(rules: Rule[]): Rule[] {
     return rules;
   }
 
-  const maxLine = Math.max(...rules.map((r) => r.source.lineStart));
-  const midpoint = maxLine / 2;
+  const midpointByFile = new Map<string, number>();
+  for (const rule of rules) {
+    const file = rule.source.file;
+    const currentMax = midpointByFile.get(file) ?? 0;
+    if (rule.source.lineStart > currentMax) {
+      midpointByFile.set(file, rule.source.lineStart);
+    }
+  }
 
   return rules.map((rule) => {
     const isHighPriority = HIGH_PRIORITY_CATEGORIES.includes(rule.category);
+    const maxLine = midpointByFile.get(rule.source.file) ?? rule.source.lineStart;
+    const midpoint = maxLine / 2;
     const isInBottomHalf = rule.source.lineStart > midpoint;
 
     if (!isHighPriority || !isInBottomHalf) {
