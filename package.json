@@ -20,12 +20,21 @@
   "keywords": [
     "ai",
     "agent",
-    "lint",
     "claude",
+    "claude-code",
     "cursor",
-    "instruction"
+    "mcp",
+    "instruction",
+    "rules",
+    "lint",
+    "agents-md",
+    "developer-tools"
   ],
   "license": "MIT",
+  "homepage": "https://github.com/mbwsims/alignkit#readme",
+  "bugs": {
+    "url": "https://github.com/mbwsims/alignkit/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/mbwsims/alignkit"
