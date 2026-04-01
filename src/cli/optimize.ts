@@ -1,9 +1,10 @@
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import type { Command } from 'commander';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { discoverInstructionTargets } from '../parsers/auto-detect.js';
+import { parseInstructionFile } from '../parsers/auto-detect.js';
 import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { HistoryStore } from '../history/store.js';
 import type { SessionResult } from '../history/types.js';
@@ -65,6 +66,125 @@ export function reconstructMarkdown(rules: Rule[]): string {
 
   lines.push('');
   return lines.join('\n');
+}
+
+export interface OptimizeTargetDocument {
+  filePath: string;
+  frontmatterBlock: string | null;
+  importLines: string[];
+  style: 'markdown' | 'plain';
+  rules: Rule[];
+  hasExternalGraph: boolean;
+}
+
+function extractFrontmatterBlock(content: string): string | null {
+  const lines = content.split('\n');
+  if (lines[0]?.trim() !== '---') {
+    return null;
+  }
+
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '---') {
+      return lines.slice(0, i + 1).join('\n');
+    }
+  }
+
+  return null;
+}
+
+function stripLeadingFrontmatter(content: string): string {
+  const frontmatter = extractFrontmatterBlock(content);
+  if (!frontmatter) {
+    return content;
+  }
+
+  return content.slice(frontmatter.length).replace(/^\n/, '');
+}
+
+function extractImportLines(content: string): string[] {
+  const body = stripLeadingFrontmatter(content);
+  const lines = body.split('\n');
+  const imports: string[] = [];
+  let inCodeFence = false;
+
+  for (const rawLine of lines) {
+    if (/^```/.test(rawLine.trim())) {
+      inCodeFence = !inCodeFence;
+      continue;
+    }
+
+    if (inCodeFence) continue;
+
+    const trimmed = rawLine.trim();
+    if (/^(?:[-*]\s+|\d+\.\s+)?@[^\s]+$/.test(trimmed)) {
+      imports.push(trimmed);
+    }
+  }
+
+  return imports;
+}
+
+function hasMarkdownStructure(content: string): boolean {
+  return /(^#{1,6}\s)|(^[-*]\s)|(^\d+\.\s)|(^```)/m.test(content);
+}
+
+export function getOptimizedOutputFileName(filePath: string): string {
+  const parsed = path.parse(filePath);
+
+  if (parsed.base.startsWith('.') && parsed.ext === '') {
+    return `${parsed.base}.optimized`;
+  }
+
+  return `${parsed.name}.optimized${parsed.ext}`;
+}
+
+export function analyzeOptimizeTarget(
+  filePath: string,
+  cwd: string,
+  graph = loadEffectiveInstructionGraph(filePath, cwd),
+): OptimizeTargetDocument {
+  const resolvedPath = path.resolve(filePath);
+  const content = readFileSync(resolvedPath, 'utf-8');
+  const body = stripLeadingFrontmatter(content);
+
+  return {
+    filePath: resolvedPath,
+    frontmatterBlock: extractFrontmatterBlock(content),
+    importLines: extractImportLines(content),
+    style: hasMarkdownStructure(body) || path.extname(resolvedPath) !== '' ? 'markdown' : 'plain',
+    rules: parseInstructionFile(content, resolvedPath, cwd),
+    hasExternalGraph: graph.loadedFiles.some((loaded) => path.resolve(loaded) !== resolvedPath),
+  };
+}
+
+export function reconstructInstructionDocument(
+  document: OptimizeTargetDocument,
+  rules: Rule[],
+): string {
+  const parts: string[] = [];
+
+  if (document.frontmatterBlock) {
+    parts.push(document.frontmatterBlock.trimEnd());
+  }
+
+  if (document.importLines.length > 0) {
+    parts.push(document.importLines.join('\n'));
+  }
+
+  if (rules.length > 0) {
+    const hasSections = rules.some((rule) => rule.source.section !== null);
+    if (document.style === 'plain' && !hasSections) {
+      parts.push(rules.map((rule) => rule.text).join('\n'));
+    } else {
+      parts.push(reconstructMarkdown(rules).trimEnd());
+    }
+  }
+
+  if (parts.length === 0) {
+    return '\n';
+  }
+
+  return parts.join('\n\n') + '\n';
 }
 
 /**
@@ -133,13 +253,16 @@ export function registerOptimizeCommand(program: Command): void {
         filePath = discovered[0].absolutePath;
       }
 
-      // 2. Parse rules
-      const originalRules = loadEffectiveInstructionGraph(filePath, cwd).rules;
+      // 2. Parse the effective graph for history epoch lookup, but only
+      // optimize rules physically defined in the target file.
+      const graph = loadEffectiveInstructionGraph(filePath, cwd);
+      const document = analyzeOptimizeTarget(filePath, cwd, graph);
+      const originalRules = document.rules;
 
       // 3. Load history if available (optimize works with or without session data)
       const alignkitDir = path.join(cwd, '.alignkit');
       const store = new HistoryStore(alignkitDir);
-      const rulesVersion = HistoryStore.computeRulesVersion(filePath, cwd);
+      const rulesVersion = graph.graphHash;
       const sessions = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
       const hasSessionData = sessions.length > 0;
       const { adherenceMap, relevanceMap } = computeMaps(originalRules, sessions);
@@ -173,18 +296,18 @@ export function registerOptimizeCommand(program: Command): void {
         mkdirSync(alignkitDir, { recursive: true });
       }
 
-      const outputFileName = path.basename(filePath).replace(/\.md$/, '.optimized.md');
+      const outputFileName = getOptimizedOutputFileName(filePath);
       const outputPath = path.join(cwd, outputFileName);
       const diffPath = path.join(cwd, 'alignkit-diff.md');
 
-      writeFileSync(outputPath, reconstructMarkdown(finalRules), 'utf-8');
+      writeFileSync(outputPath, reconstructInstructionDocument(document, finalRules), 'utf-8');
       writeDiff(originalRules, finalRules, deduped, flagged, diffPath);
 
       // 6. Output summary
       // Compare tokens of rules only (not the full file with documentation)
-      const beforeContent = reconstructMarkdown(originalRules);
+      const beforeContent = reconstructInstructionDocument(document, originalRules);
       const beforeTokens = estimateTokens(beforeContent);
-      const afterContent = reconstructMarkdown(finalRules);
+      const afterContent = reconstructInstructionDocument(document, finalRules);
       const afterTokens = estimateTokens(afterContent);
       const tokenSaved = deduped.reduce((sum, d) => sum + estimateTokens(d.removed.text), 0);
       const neverRelevantCount = flagged.filter((f) => f.reason === 'never-relevant').length;
@@ -206,6 +329,10 @@ export function registerOptimizeCommand(program: Command): void {
         if (!hasSessionData) {
           console.log(pc.dim('No session history found — optimizing based on structural analysis only.'));
           console.log(pc.dim('Run `alignkit check` first for adherence-based optimization.'));
+          console.log('');
+        }
+        if (document.hasExternalGraph) {
+          console.log(pc.dim(`Optimizing only rules defined in ${path.basename(filePath)}. Imported and stacked rules stay in their source files.`));
           console.log('');
         }
 
