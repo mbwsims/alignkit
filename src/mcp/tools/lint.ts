@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { discoverInstructionFiles, parseInstructionFile } from '../../parsers/auto-detect.js';
+import { discoverInstructionFiles } from '../../parsers/auto-detect.js';
+import { loadInstructionGraph } from '../../parsers/instruction-loader.js';
 import { detectVague } from '../../analyzers/vague-detector.js';
 import { detectDuplicates } from '../../analyzers/duplicate-detector.js';
 import { detectConflicts } from '../../analyzers/conflict-detector.js';
@@ -101,8 +101,7 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
   }
 
   // 2. Parse into rules
-  const content = readFileSync(filePath, 'utf-8');
-  let rules = parseInstructionFile(content, filePath);
+  let rules = loadInstructionGraph(filePath).rules;
 
   // 3. Run all static analyzers
   rules = detectVague(rules);

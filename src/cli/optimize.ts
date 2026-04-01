@@ -1,9 +1,10 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import type { Command } from 'commander';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
-import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
+import { discoverInstructionFiles } from '../parsers/auto-detect.js';
+import { loadInstructionGraph } from '../parsers/instruction-loader.js';
 import { HistoryStore } from '../history/store.js';
 import type { SessionResult } from '../history/types.js';
 import type { Rule } from '../parsers/types.js';
@@ -133,8 +134,7 @@ export function registerOptimizeCommand(program: Command): void {
       }
 
       // 2. Parse rules
-      const content = readFileSync(filePath, 'utf-8');
-      const originalRules = parseInstructionFile(content, filePath);
+      const originalRules = loadInstructionGraph(filePath).rules;
 
       // 3. Load history if available (optimize works with or without session data)
       const alignkitDir = path.join(cwd, '.alignkit');

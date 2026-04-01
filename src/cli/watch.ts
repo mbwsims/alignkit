@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { Command } from 'commander';
-import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
+import { discoverInstructionFiles } from '../parsers/auto-detect.js';
+import { loadInstructionGraph } from '../parsers/instruction-loader.js';
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
@@ -24,11 +24,6 @@ function serializeObservation(obs: Observation): SerializedObservation {
 function formatTime(): string {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-}
-
-function hashFile(filePath: string): string {
-  const content = readFileSync(filePath, 'utf-8');
-  return createHash('sha256').update(content).digest('hex').slice(0, 12);
 }
 
 /**
@@ -116,10 +111,10 @@ export function registerWatchCommand(program: Command): void {
       }
 
       // 2. Parse rules and compute version
-      const content = readFileSync(filePath, 'utf-8');
-      let rules = parseInstructionFile(content, filePath);
-      let rulesVersion = HistoryStore.computeRulesVersion(filePath);
-      let fileHash = hashFile(filePath);
+      let graph = loadInstructionGraph(filePath);
+      let rules = graph.rules;
+      let rulesVersion = graph.graphHash;
+      let fileHash = graph.graphHash;
 
       // 3. Resolve alignkit directory
       const alignkitDir = path.join(cwd, '.alignkit');
@@ -159,12 +154,13 @@ export function registerWatchCommand(program: Command): void {
       const poll = (): void => {
         try {
           // Check if instruction file changed
-          const currentHash = hashFile(filePath);
+          const currentGraph = loadInstructionGraph(filePath);
+          const currentHash = currentGraph.graphHash;
           if (currentHash !== fileHash) {
             fileHash = currentHash;
-            const newContent = readFileSync(filePath, 'utf-8');
-            rules = parseInstructionFile(newContent, filePath);
-            rulesVersion = HistoryStore.computeRulesVersion(filePath);
+            graph = currentGraph;
+            rules = currentGraph.rules;
+            rulesVersion = currentGraph.graphHash;
             if (!options.quiet) {
               console.log(`[${formatTime()}] Instruction file changed — new tracking epoch`);
             }

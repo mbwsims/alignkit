@@ -151,6 +151,21 @@ describe('HistoryStore', () => {
         HistoryStore.computeRulesVersion(f2),
       );
     });
+
+    it('changes when an imported file changes', () => {
+      const rootFile = join(tmpDir, 'CLAUDE.md');
+      const importedFile = join(tmpDir, 'docs.md');
+
+      writeFileSync(rootFile, '- @docs.md\n', 'utf-8');
+      writeFileSync(importedFile, '- Always use pnpm.\n', 'utf-8');
+
+      const firstHash = HistoryStore.computeRulesVersion(rootFile);
+
+      writeFileSync(importedFile, '- Always use bun.\n', 'utf-8');
+
+      const secondHash = HistoryStore.computeRulesVersion(rootFile);
+      expect(secondHash).not.toBe(firstHash);
+    });
   });
 
   describe('queryByEpoch', () => {

@@ -2,17 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
 import { ANALYSIS_VERSION } from '../../../src/history/analysis-version.js';
+import { HistoryStore } from '../../../src/history/store.js';
 import { statusTool } from '../../../src/mcp/tools/status.js';
 import type { SessionResult } from '../../../src/history/types.js';
-
-function computeRulesVersion(filePath: string): string {
-  const { readFileSync } = require('node:fs');
-  const content = readFileSync(filePath, 'utf-8');
-  const hash = createHash('sha256').update(content).digest('hex');
-  return hash.slice(0, 12);
-}
 
 describe('statusTool', () => {
   let tmpDir: string;
@@ -58,7 +51,7 @@ describe('statusTool', () => {
     const alignkitDir = join(tmpDir, '.alignkit');
     mkdirSync(alignkitDir, { recursive: true });
 
-    const rulesVersion = computeRulesVersion(claudeFile);
+    const rulesVersion = HistoryStore.computeRulesVersion(claudeFile);
 
     const session1: SessionResult = {
       sessionId: 'sess-1',
@@ -113,7 +106,7 @@ describe('statusTool', () => {
     const alignkitDir = join(tmpDir, '.alignkit');
     mkdirSync(alignkitDir, { recursive: true });
 
-    const rulesVersion = computeRulesVersion(claudeFile);
+    const rulesVersion = HistoryStore.computeRulesVersion(claudeFile);
     const historyPath = join(alignkitDir, 'history.jsonl');
 
     // Create 4 sessions: first 2 have 0% adherence, last 2 have 100%

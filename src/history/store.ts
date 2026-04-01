@@ -8,7 +8,7 @@ import {
   statSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
+import { loadInstructionGraph } from '../parsers/instruction-loader.js';
 import type { SessionResult } from './types.js';
 
 const HISTORY_FILE = 'history.jsonl';
@@ -81,9 +81,7 @@ export class HistoryStore {
 
   /** Get the current rules version hash. */
   static computeRulesVersion(filePath: string): string {
-    const content = readFileSync(filePath, 'utf-8');
-    const hash = createHash('sha256').update(content).digest('hex');
-    return hash.slice(0, 12);
+    return loadInstructionGraph(filePath).graphHash;
   }
 
   /** Remove a session from history (for --fresh re-analysis). */

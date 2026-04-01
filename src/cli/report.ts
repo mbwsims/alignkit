@@ -1,9 +1,10 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 import type { Command } from 'commander';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
-import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
+import { discoverInstructionFiles } from '../parsers/auto-detect.js';
+import { loadInstructionGraph } from '../parsers/instruction-loader.js';
 import { HistoryStore } from '../history/store.js';
 import type { SessionResult } from '../history/types.js';
 import type { Rule } from '../parsers/types.js';
@@ -407,8 +408,7 @@ export function registerReportCommand(program: Command): void {
       }
 
       // 2. Parse rules
-      const content = readFileSync(filePath, 'utf-8');
-      const rules = parseInstructionFile(content, filePath);
+      const rules = loadInstructionGraph(filePath).rules;
 
       // 3. Load history
       const alignkitDir = path.join(cwd, '.alignkit');

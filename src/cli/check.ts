@@ -1,9 +1,10 @@
-import { readFileSync, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import pc from 'picocolors';
 import type { Command } from 'commander';
-import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
+import { discoverInstructionFiles } from '../parsers/auto-detect.js';
+import { loadInstructionGraph } from '../parsers/instruction-loader.js';
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
 import { verifyWithLLM } from '../verifiers/llm-judge.js';
@@ -43,6 +44,13 @@ function getFileSince(filePath: string, cwd: string): Date {
   // Fall back to file mtime
   const stat = statSync(filePath);
   return new Date(stat.mtimeMs);
+}
+
+function getGraphSince(filePaths: string[], cwd: string): Date {
+  return filePaths.reduce((latest, filePath) => {
+    const candidate = getFileSince(filePath, cwd);
+    return candidate.getTime() > latest.getTime() ? candidate : latest;
+  }, new Date(0));
 }
 
 function formatTimeAgo(date: Date): string {
@@ -302,11 +310,11 @@ export function registerCheckCommand(program: Command): void {
       }
 
       // 2. Parse into Rule[]
-      const content = readFileSync(filePath, 'utf-8');
-      const rules = parseInstructionFile(content, filePath);
+      const graph = loadInstructionGraph(filePath);
+      const rules = graph.rules;
 
       // 3. Compute rulesVersion hash
-      const rulesVersion = HistoryStore.computeRulesVersion(filePath);
+      const rulesVersion = graph.graphHash;
 
       // 4. Determine since date
       let sinceDate: Date;
@@ -314,7 +322,7 @@ export function registerCheckCommand(program: Command): void {
         const days = parseInt(options.sinceDays, 10);
         sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
       } else {
-        sinceDate = getFileSince(filePath, cwd);
+        sinceDate = getGraphSince(graph.loadedFiles, cwd);
       }
 
       // 5. Read sessions

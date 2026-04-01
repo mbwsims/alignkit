@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Command } from 'commander';
 import { loadConfig } from '../config/loader.js';
-import { discoverInstructionFiles, parseInstructionFile } from '../parsers/auto-detect.js';
+import { discoverInstructionFiles } from '../parsers/auto-detect.js';
+import { loadInstructionGraph } from '../parsers/instruction-loader.js';
 import { detectVague } from '../analyzers/vague-detector.js';
 import { detectDuplicates } from '../analyzers/duplicate-detector.js';
 import { detectConflicts } from '../analyzers/conflict-detector.js';
@@ -63,16 +63,7 @@ export function registerLintCommand(program: Command): void {
       const results: LintResult[] = [];
 
       for (const filePath of filesToAnalyze) {
-        let content: string;
-        try {
-          content = readFileSync(filePath, 'utf-8');
-        } catch (err) {
-          console.error(`Error: Cannot read file "${filePath}".`);
-          process.exit(1);
-        }
-
-        // Parse
-        let rules = parseInstructionFile(content, filePath);
+        let rules = loadInstructionGraph(filePath).rules;
 
         // Run all analyzers in sequence
         rules = detectVague(rules);
