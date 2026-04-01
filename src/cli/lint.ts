@@ -1,8 +1,8 @@
 import path from 'node:path';
 import type { Command } from 'commander';
 import { loadConfig } from '../config/loader.js';
-import { discoverInstructionFiles } from '../parsers/auto-detect.js';
-import { loadInstructionGraph } from '../parsers/instruction-loader.js';
+import { discoverInstructionFiles, discoverInstructionTargets } from '../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { detectVague } from '../analyzers/vague-detector.js';
 import { detectDuplicates } from '../analyzers/duplicate-detector.js';
 import { detectConflicts } from '../analyzers/conflict-detector.js';
@@ -42,8 +42,8 @@ export function registerLintCommand(program: Command): void {
           console.error('Error: No instruction files found.');
           process.exit(1);
         }
-        // Analyze all discovered files
-        filesToAnalyze = discovered.map((f) => f.absolutePath);
+        // Analyze each effective target once
+        filesToAnalyze = discoverInstructionTargets(cwd).map((f) => f.absolutePath);
       }
 
       // Select reporter
@@ -63,7 +63,7 @@ export function registerLintCommand(program: Command): void {
       const results: LintResult[] = [];
 
       for (const filePath of filesToAnalyze) {
-        let rules = loadInstructionGraph(filePath).rules;
+        let rules = loadEffectiveInstructionGraph(filePath, cwd).rules;
 
         // Run all analyzers in sequence
         rules = detectVague(rules);

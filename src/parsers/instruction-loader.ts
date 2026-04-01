@@ -3,12 +3,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import type { Rule } from './types.js';
-import { parseInstructionFile } from './auto-detect.js';
+import { isClaudeMemoryFilePath, parseInstructionFile } from './auto-detect.js';
 
 const MAX_IMPORT_DEPTH = 5;
 
 export interface InstructionGraph {
   rootFile: string;
+  entryFiles: string[];
   rules: Rule[];
   loadedFiles: string[];
   graphHash: string;
@@ -59,8 +60,7 @@ interface LoadedFile {
   content: string;
 }
 
-export function loadInstructionGraph(filePath: string): InstructionGraph {
-  const rootFile = path.resolve(filePath);
+function buildInstructionGraph(rootFile: string, entryFiles: string[]): InstructionGraph {
   const loadedFiles: LoadedFile[] = [];
   const rules: Rule[] = [];
   const visited = new Set<string>();
@@ -82,7 +82,9 @@ export function loadInstructionGraph(filePath: string): InstructionGraph {
     }
   }
 
-  visit(rootFile, 0);
+  for (const entryFile of entryFiles) {
+    visit(entryFile, 0);
+  }
 
   const graphHash = createHash('sha256')
     .update(
@@ -95,8 +97,82 @@ export function loadInstructionGraph(filePath: string): InstructionGraph {
 
   return {
     rootFile,
+    entryFiles,
     rules,
     loadedFiles: loadedFiles.map((file) => file.filePath),
     graphHash,
   };
+}
+
+function resolveBoundaryDir(targetDir: string, cwd: string): string | null {
+  const resolvedCwd = path.resolve(cwd);
+  const relative = path.relative(resolvedCwd, targetDir);
+
+  if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
+    return resolvedCwd;
+  }
+
+  return null;
+}
+
+function resolveEffectiveMemoryEntryFiles(filePath: string, cwd: string): string[] {
+  const rootFile = path.resolve(filePath);
+  // Model Claude's project memory stack within the current workspace rather
+  // than implicitly pulling in parent-directory memories outside the repo.
+  const boundaryDir = resolveBoundaryDir(path.dirname(rootFile), cwd);
+  const directories: string[] = [];
+
+  let currentDir = path.dirname(rootFile);
+  while (true) {
+    directories.push(currentDir);
+
+    if (boundaryDir !== null && currentDir === boundaryDir) {
+      break;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
+  }
+
+  const entryFiles: string[] = [];
+
+  for (const dir of directories.reverse()) {
+    const sharedFile = path.join(dir, 'CLAUDE.md');
+    const localFile = path.join(dir, 'CLAUDE.local.md');
+
+    if (existsSync(sharedFile)) {
+      entryFiles.push(sharedFile);
+    }
+    if (existsSync(localFile)) {
+      entryFiles.push(localFile);
+    }
+  }
+
+  if (entryFiles.length === 0) {
+    entryFiles.push(rootFile);
+  }
+
+  return Array.from(new Set(entryFiles.map((entry) => path.resolve(entry))));
+}
+
+export function loadInstructionGraph(filePath: string): InstructionGraph {
+  const rootFile = path.resolve(filePath);
+  return buildInstructionGraph(rootFile, [rootFile]);
+}
+
+export function loadEffectiveInstructionGraph(filePath: string, cwd: string): InstructionGraph {
+  const rootFile = path.resolve(filePath);
+
+  if (!isClaudeMemoryFilePath(rootFile)) {
+    return loadInstructionGraph(rootFile);
+  }
+
+  return buildInstructionGraph(
+    rootFile,
+    resolveEffectiveMemoryEntryFiles(rootFile, cwd),
+  );
 }

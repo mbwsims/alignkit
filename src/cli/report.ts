@@ -3,8 +3,8 @@ import path from 'node:path';
 import pc from 'picocolors';
 import type { Command } from 'commander';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
-import { discoverInstructionFiles } from '../parsers/auto-detect.js';
-import { loadInstructionGraph } from '../parsers/instruction-loader.js';
+import { discoverInstructionTargets } from '../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { HistoryStore } from '../history/store.js';
 import type { SessionResult } from '../history/types.js';
 import type { Rule } from '../parsers/types.js';
@@ -399,7 +399,7 @@ export function registerReportCommand(program: Command): void {
       if (file) {
         filePath = path.resolve(cwd, file);
       } else {
-        const discovered = discoverInstructionFiles(cwd);
+        const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
           console.error('Error: No instruction files found.');
           process.exit(1);
@@ -408,12 +408,12 @@ export function registerReportCommand(program: Command): void {
       }
 
       // 2. Parse rules
-      const rules = loadInstructionGraph(filePath).rules;
+      const rules = loadEffectiveInstructionGraph(filePath, cwd).rules;
 
       // 3. Load history
       const alignkitDir = path.join(cwd, '.alignkit');
       const store = new HistoryStore(alignkitDir);
-      const rulesVersion = HistoryStore.computeRulesVersion(filePath);
+      const rulesVersion = HistoryStore.computeRulesVersion(filePath, cwd);
       const sessions = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
       // 4. Compute report

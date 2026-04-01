@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { ANALYSIS_VERSION } from '../../history/analysis-version.js';
-import { discoverInstructionFiles } from '../../parsers/auto-detect.js';
+import { discoverInstructionTargets } from '../../parsers/auto-detect.js';
 import { HistoryStore } from '../../history/store.js';
 import type { SessionResult } from '../../history/types.js';
 
@@ -40,7 +40,7 @@ export function statusTool(cwd: string, file?: string): StatusToolResult {
     filePath = path.resolve(cwd, file);
     relPath = path.relative(cwd, filePath);
   } else {
-    const discovered = discoverInstructionFiles(cwd);
+    const discovered = discoverInstructionTargets(cwd);
     if (discovered.length === 0) {
       return {
         file: '(none)',
@@ -59,7 +59,7 @@ export function statusTool(cwd: string, file?: string): StatusToolResult {
   const store = new HistoryStore(alignkitDir);
 
   // 3. Get current epoch sessions
-  const rulesVersion = HistoryStore.computeRulesVersion(filePath);
+  const rulesVersion = HistoryStore.computeRulesVersion(filePath, cwd);
   const sessions = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
   if (sessions.length === 0) {

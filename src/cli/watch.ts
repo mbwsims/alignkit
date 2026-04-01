@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import type { Command } from 'commander';
-import { discoverInstructionFiles } from '../parsers/auto-detect.js';
-import { loadInstructionGraph } from '../parsers/instruction-loader.js';
+import { discoverInstructionTargets } from '../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
@@ -102,7 +102,7 @@ export function registerWatchCommand(program: Command): void {
       if (file) {
         filePath = path.resolve(cwd, file);
       } else {
-        const discovered = discoverInstructionFiles(cwd);
+        const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
           console.error('Error: No instruction files found.');
           process.exit(1);
@@ -111,7 +111,7 @@ export function registerWatchCommand(program: Command): void {
       }
 
       // 2. Parse rules and compute version
-      let graph = loadInstructionGraph(filePath);
+      let graph = loadEffectiveInstructionGraph(filePath, cwd);
       let rules = graph.rules;
       let rulesVersion = graph.graphHash;
       let fileHash = graph.graphHash;
@@ -154,7 +154,7 @@ export function registerWatchCommand(program: Command): void {
       const poll = (): void => {
         try {
           // Check if instruction file changed
-          const currentGraph = loadInstructionGraph(filePath);
+          const currentGraph = loadEffectiveInstructionGraph(filePath, cwd);
           const currentHash = currentGraph.graphHash;
           if (currentHash !== fileHash) {
             fileHash = currentHash;

@@ -3,8 +3,8 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import pc from 'picocolors';
 import type { Command } from 'commander';
-import { discoverInstructionFiles } from '../parsers/auto-detect.js';
-import { loadInstructionGraph } from '../parsers/instruction-loader.js';
+import { discoverInstructionTargets } from '../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
 import { verifyWithLLM } from '../verifiers/llm-judge.js';
@@ -300,7 +300,7 @@ export function registerCheckCommand(program: Command): void {
         filePath = path.resolve(cwd, file);
         relPath = path.relative(cwd, filePath);
       } else {
-        const discovered = discoverInstructionFiles(cwd);
+        const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
           console.error('Error: No instruction files found.');
           process.exit(1);
@@ -310,7 +310,7 @@ export function registerCheckCommand(program: Command): void {
       }
 
       // 2. Parse into Rule[]
-      const graph = loadInstructionGraph(filePath);
+      const graph = loadEffectiveInstructionGraph(filePath, cwd);
       const rules = graph.rules;
 
       // 3. Compute rulesVersion hash

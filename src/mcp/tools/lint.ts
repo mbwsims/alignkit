@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { discoverInstructionFiles } from '../../parsers/auto-detect.js';
-import { loadInstructionGraph } from '../../parsers/instruction-loader.js';
+import { discoverInstructionTargets } from '../../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../../parsers/instruction-loader.js';
 import { detectVague } from '../../analyzers/vague-detector.js';
 import { detectDuplicates } from '../../analyzers/duplicate-detector.js';
 import { detectConflicts } from '../../analyzers/conflict-detector.js';
@@ -85,7 +85,7 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
     filePath = path.resolve(cwd, file);
     relPath = path.relative(cwd, filePath);
   } else {
-    const discovered = discoverInstructionFiles(cwd);
+    const discovered = discoverInstructionTargets(cwd);
     if (discovered.length === 0) {
       return {
         file: '(none)',
@@ -101,7 +101,7 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
   }
 
   // 2. Parse into rules
-  let rules = loadInstructionGraph(filePath).rules;
+  let rules = loadEffectiveInstructionGraph(filePath, cwd).rules;
 
   // 3. Run all static analyzers
   rules = detectVague(rules);

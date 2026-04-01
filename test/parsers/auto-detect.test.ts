@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { discoverInstructionFiles, parseInstructionFile } from '../../src/parsers/auto-detect.js';
+import {
+  discoverInstructionFiles,
+  discoverInstructionTargets,
+  parseInstructionFile,
+} from '../../src/parsers/auto-detect.js';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `alignkit-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -114,6 +118,34 @@ describe('discoverInstructionFiles', () => {
   it('returns empty array when no files found', () => {
     const files = discoverInstructionFiles(tmpDir);
     expect(files).toHaveLength(0);
+  });
+});
+
+describe('discoverInstructionTargets', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('collapses same-directory Claude memory files into a single target', () => {
+    writeFile(tmpDir, 'CLAUDE.md', CLAUDE_MD_CONTENT);
+    writeFile(tmpDir, 'CLAUDE.local.md', CLAUDE_MD_CONTENT);
+    writeFile(tmpDir, 'apps/api/CLAUDE.md', CLAUDE_MD_CONTENT);
+    writeFile(tmpDir, 'apps/api/CLAUDE.local.md', CLAUDE_MD_CONTENT);
+    writeFile(tmpDir, 'AGENTS.md', AGENTS_MD_CONTENT);
+
+    const targets = discoverInstructionTargets(tmpDir).map((file) => file.relativePath);
+
+    expect(targets).toEqual([
+      'CLAUDE.md',
+      'AGENTS.md',
+      'apps/api/CLAUDE.md',
+    ]);
   });
 });
 

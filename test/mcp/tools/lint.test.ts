@@ -102,6 +102,21 @@ describe('lintTool', () => {
     expect(result.ruleCount).toBeGreaterThan(0);
   });
 
+  it('loads effective Claude memory stack for nested files', () => {
+    writeFileSync(join(tmpDir, 'CLAUDE.md'), '- Use pnpm for package management\n');
+    writeFileSync(join(tmpDir, 'CLAUDE.local.md'), '- Use the local sandbox\n');
+    const subDir = join(tmpDir, 'sub');
+    mkdirSync(subDir, { recursive: true });
+    writeFileSync(join(subDir, 'CLAUDE.md'), '- Run tests before pushing\n');
+
+    const result = lintTool(tmpDir, join('sub', 'CLAUDE.md'));
+    const texts = result.rules.map((rule) => rule.text);
+
+    expect(texts).toContain('Use pnpm for package management');
+    expect(texts).toContain('Use the local sandbox');
+    expect(texts).toContain('Run tests before pushing');
+  });
+
   it('returns empty result when no instruction files found', () => {
     const result = lintTool(tmpDir);
 

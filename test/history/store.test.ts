@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ANALYSIS_VERSION } from '../../src/history/analysis-version.js';
@@ -164,6 +164,23 @@ describe('HistoryStore', () => {
       writeFileSync(importedFile, '- Always use bun.\n', 'utf-8');
 
       const secondHash = HistoryStore.computeRulesVersion(rootFile);
+      expect(secondHash).not.toBe(firstHash);
+    });
+
+    it('changes when an ancestor memory file changes for a nested Claude target', () => {
+      const rootFile = join(tmpDir, 'CLAUDE.md');
+      const nestedDir = join(tmpDir, 'apps', 'api');
+      const nestedFile = join(nestedDir, 'CLAUDE.md');
+
+      mkdirSync(nestedDir, { recursive: true });
+      writeFileSync(rootFile, '- Use pnpm.\n', 'utf-8');
+      writeFileSync(nestedFile, '- Run API tests.\n', 'utf-8');
+
+      const firstHash = HistoryStore.computeRulesVersion(nestedFile, tmpDir);
+
+      writeFileSync(rootFile, '- Use bun.\n', 'utf-8');
+
+      const secondHash = HistoryStore.computeRulesVersion(nestedFile, tmpDir);
       expect(secondHash).not.toBe(firstHash);
     });
   });

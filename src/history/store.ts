@@ -7,8 +7,8 @@ import {
   unlinkSync,
   statSync,
 } from 'node:fs';
-import { join } from 'node:path';
-import { loadInstructionGraph } from '../parsers/instruction-loader.js';
+import path, { join } from 'node:path';
+import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import type { SessionResult } from './types.js';
 
 const HISTORY_FILE = 'history.jsonl';
@@ -80,8 +80,9 @@ export class HistoryStore {
   }
 
   /** Get the current rules version hash. */
-  static computeRulesVersion(filePath: string): string {
-    return loadInstructionGraph(filePath).graphHash;
+  static computeRulesVersion(filePath: string, cwd?: string): string {
+    const boundaryCwd = cwd ?? path.dirname(path.resolve(filePath));
+    return loadEffectiveInstructionGraph(filePath, boundaryCwd).graphHash;
   }
 
   /** Remove a session from history (for --fresh re-analysis). */

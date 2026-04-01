@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Command } from 'commander';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
-import { discoverInstructionFiles } from '../parsers/auto-detect.js';
+import { discoverInstructionTargets } from '../parsers/auto-detect.js';
 import { HistoryStore } from '../history/store.js';
 import type { SessionResult } from '../history/types.js';
 
@@ -143,7 +143,7 @@ export function registerStatusCommand(program: Command): void {
         filePath = path.resolve(cwd, file);
         fileName = path.basename(filePath);
       } else {
-        const discovered = discoverInstructionFiles(cwd);
+        const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
           console.error('Error: No instruction files found.');
           process.exit(1);
@@ -157,7 +157,7 @@ export function registerStatusCommand(program: Command): void {
       const store = new HistoryStore(alignkitDir);
 
       // 3. Get current epoch sessions
-      const rulesVersion = HistoryStore.computeRulesVersion(filePath);
+      const rulesVersion = HistoryStore.computeRulesVersion(filePath, cwd);
       const sessions = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION);
 
       // 4. Output status

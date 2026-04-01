@@ -1,8 +1,8 @@
 import { statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { discoverInstructionFiles } from '../../parsers/auto-detect.js';
-import { loadInstructionGraph } from '../../parsers/instruction-loader.js';
+import { discoverInstructionTargets } from '../../parsers/auto-detect.js';
+import { loadEffectiveInstructionGraph } from '../../parsers/instruction-loader.js';
 import { readSessions } from '../../sessions/session-reader.js';
 import { verifySession } from '../../verifiers/verifier-engine.js';
 import { ANALYSIS_VERSION } from '../../history/analysis-version.js';
@@ -107,7 +107,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
     filePath = path.resolve(cwd, file);
     relPath = path.relative(cwd, filePath);
   } else {
-    const discovered = discoverInstructionFiles(cwd);
+    const discovered = discoverInstructionTargets(cwd);
     if (discovered.length === 0) {
       return {
         file: '(none)',
@@ -121,7 +121,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
   }
 
   // 2. Parse into rules
-  const graph = loadInstructionGraph(filePath);
+  const graph = loadEffectiveInstructionGraph(filePath, cwd);
   const rules = graph.rules;
 
   // 3. Compute rulesVersion hash

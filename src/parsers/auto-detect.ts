@@ -27,6 +27,11 @@ function getRootPriority(relativePath: string): number {
   return priority !== undefined ? priority : 99;
 }
 
+export function isClaudeMemoryFilePath(filePath: string): boolean {
+  const basename = path.basename(filePath);
+  return basename === 'CLAUDE.md' || basename === 'CLAUDE.local.md';
+}
+
 export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
   const patterns = [
     '**/CLAUDE.md',
@@ -66,6 +71,31 @@ export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
   });
 
   return files;
+}
+
+export function discoverInstructionTargets(cwd: string): DiscoveredFile[] {
+  const discovered = discoverInstructionFiles(cwd);
+  const primaryClaudeFileByDir = new Map<string, string>();
+
+  for (const file of discovered) {
+    if (!isClaudeMemoryFilePath(file.absolutePath)) continue;
+
+    const dirKey = path.dirname(file.relativePath);
+    const existing = primaryClaudeFileByDir.get(dirKey);
+
+    if (
+      existing === undefined ||
+      getRootPriority(file.relativePath) < getRootPriority(existing)
+    ) {
+      primaryClaudeFileByDir.set(dirKey, file.relativePath);
+    }
+  }
+
+  return discovered.filter((file) => {
+    if (!isClaudeMemoryFilePath(file.absolutePath)) return true;
+    const dirKey = path.dirname(file.relativePath);
+    return primaryClaudeFileByDir.get(dirKey) === file.relativePath;
+  });
 }
 
 export function parseInstructionFile(content: string, filePath: string): Rule[] {

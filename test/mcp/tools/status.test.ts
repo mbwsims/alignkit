@@ -148,4 +148,37 @@ describe('statusTool', () => {
 
     expect(result.file).toBe(join('sub', 'CLAUDE.md'));
   });
+
+  it('uses stacked memory hash when a local Claude file is present', () => {
+    const claudeFile = join(tmpDir, 'CLAUDE.md');
+    writeFileSync(claudeFile, '- Always use pnpm\n');
+    writeFileSync(join(tmpDir, 'CLAUDE.local.md'), '- Use the local sandbox\n');
+
+    const alignkitDir = join(tmpDir, '.alignkit');
+    mkdirSync(alignkitDir, { recursive: true });
+
+    const rulesVersion = HistoryStore.computeRulesVersion(claudeFile, tmpDir);
+
+    const session: SessionResult = {
+      sessionId: 'sess-stacked',
+      timestamp: new Date().toISOString(),
+      rulesVersion,
+      analysisVersion: ANALYSIS_VERSION,
+      observations: [
+        {
+          ruleId: 'rule-1',
+          sessionId: 'sess-stacked',
+          relevant: true,
+          followed: true,
+          method: 'auto:bash-keyword',
+          confidence: 'high',
+        },
+      ],
+    };
+
+    writeFileSync(join(alignkitDir, 'history.jsonl'), JSON.stringify(session) + '\n');
+
+    const result = statusTool(tmpDir);
+    expect(result.sessionCount).toBe(1);
+  });
 });
