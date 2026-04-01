@@ -11,20 +11,8 @@ import { verifyWithLLM } from '../verifiers/llm-judge.js';
 import { aggregateAdherence } from '../check/adherence.js';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { HistoryStore } from '../history/store.js';
-import type { Observation } from '../verifiers/types.js';
-import type { SerializedObservation, SessionResult } from '../history/types.js';
-
-function serializeObservation(obs: Observation): SerializedObservation {
-  return {
-    ruleId: obs.ruleId,
-    sessionId: obs.sessionId,
-    relevant: obs.relevant,
-    followed: obs.relevant ? obs.followed : null,
-    method: obs.method,
-    confidence: obs.confidence,
-    evidence: obs.evidence,
-  };
-}
+import { serializeObservation } from '../verifiers/types.js';
+import type { SessionResult } from '../history/types.js';
 
 function getFileSince(filePath: string, cwd: string): Date {
   // Try git log for last commit date of file

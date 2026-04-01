@@ -7,20 +7,8 @@ import { readSessions } from '../sessions/session-reader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { HistoryStore } from '../history/store.js';
-import type { Observation } from '../verifiers/types.js';
-import type { SerializedObservation, SessionResult } from '../history/types.js';
-
-function serializeObservation(obs: Observation): SerializedObservation {
-  return {
-    ruleId: obs.ruleId,
-    sessionId: obs.sessionId,
-    relevant: obs.relevant,
-    followed: obs.relevant ? obs.followed : null,
-    method: obs.method,
-    confidence: obs.confidence,
-    evidence: obs.evidence,
-  };
-}
+import { serializeObservation } from '../verifiers/types.js';
+import type { SessionResult } from '../history/types.js';
 
 function formatTime(): string {
   const now = new Date();

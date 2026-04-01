@@ -37,3 +37,18 @@ export type VerifierFunction = (
   actions: AgentAction[],
   sessionId: string,
 ) => Observation;
+
+/**
+ * Serialize an Observation into a format suitable for history storage.
+ */
+export function serializeObservation(obs: Observation): import('../history/types.js').SerializedObservation {
+  return {
+    ruleId: obs.ruleId,
+    sessionId: obs.sessionId,
+    relevant: obs.relevant,
+    followed: obs.relevant ? obs.followed : null,
+    method: obs.method,
+    confidence: obs.confidence,
+    evidence: obs.evidence,
+  };
+}

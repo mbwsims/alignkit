@@ -9,6 +9,7 @@ import { analyzeOrdering } from '../../analyzers/ordering-analyzer.js';
 import { detectLinterRules } from '../../analyzers/linter-rule-detector.js';
 import { advisePlacement } from '../../analyzers/placement-advisor.js';
 import { validateInstructionMetadata } from '../../analyzers/instruction-metadata-validator.js';
+import { detectWeakEmphasis } from '../../analyzers/emphasis-detector.js';
 import { analyzeTokens } from '../../analyzers/token-counter.js';
 import { collectProjectContext } from '../../analyzers/project-context.js';
 import type { TokenAnalysis } from '../../analyzers/types.js';
@@ -133,6 +134,15 @@ function computeQuickWins(
     );
   }
 
+  const weakEmphasisCount = rules.filter((r) =>
+    r.diagnostics.some((d) => d.code === 'WEAK_EMPHASIS'),
+  ).length;
+  if (weakEmphasisCount > 0) {
+    wins.push(
+      `Strengthen ${weakEmphasisCount} high-priority rule${weakEmphasisCount > 1 ? 's' : ''} with emphasis (e.g., IMPORTANT, MUST, NEVER).`,
+    );
+  }
+
   if (tokenAnalysis.overBudget) {
     wins.push(
       `Reduce token count from ${tokenAnalysis.tokenCount} to under ${tokenAnalysis.budgetThreshold} (currently ${tokenAnalysis.contextWindowPercent.toFixed(1)}% of context window).`,
@@ -179,6 +189,7 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
   rules = analyzeOrdering(rules);
   rules = detectLinterRules(rules);
   rules = advisePlacement(rules, cwd);
+  rules = detectWeakEmphasis(rules);
 
   // 4. Token analysis
   const tokenAnalysis = analyzeTokens(rules);

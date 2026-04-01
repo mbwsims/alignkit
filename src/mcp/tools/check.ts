@@ -8,8 +8,8 @@ import { verifySession } from '../../verifiers/verifier-engine.js';
 import { aggregateAdherence } from '../../check/adherence.js';
 import { ANALYSIS_VERSION } from '../../history/analysis-version.js';
 import { HistoryStore } from '../../history/store.js';
-import type { Observation } from '../../verifiers/types.js';
-import type { SerializedObservation, SessionResult } from '../../history/types.js';
+import { serializeObservation } from '../../verifiers/types.js';
+import type { SessionResult } from '../../history/types.js';
 import type { Rule } from '../../parsers/types.js';
 import type { AgentAction } from '../../sessions/types.js';
 
@@ -38,18 +38,6 @@ export interface CheckToolResult {
       editedFiles: string[];
     }>;
   }>;
-}
-
-function serializeObservation(obs: Observation): SerializedObservation {
-  return {
-    ruleId: obs.ruleId,
-    sessionId: obs.sessionId,
-    relevant: obs.relevant,
-    followed: obs.relevant ? obs.followed : null,
-    method: obs.method,
-    confidence: obs.confidence,
-    evidence: obs.evidence,
-  };
 }
 
 function getFileSince(filePath: string, cwd: string): Date {
