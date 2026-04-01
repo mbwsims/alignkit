@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { discoverInstructionTargets } from '../../parsers/auto-detect.js';
+import { discoverLintTargets } from '../../parsers/auto-detect.js';
 import { loadEffectiveInstructionGraph } from '../../parsers/instruction-loader.js';
 import { detectVague } from '../../analyzers/vague-detector.js';
 import { detectDuplicates } from '../../analyzers/duplicate-detector.js';
@@ -128,7 +128,7 @@ export function lintTool(cwd: string, file?: string): LintToolResult {
     filePath = path.resolve(cwd, file);
     relPath = path.relative(cwd, filePath);
   } else {
-    const discovered = discoverInstructionTargets(cwd);
+    const discovered = discoverLintTargets(cwd);
     if (discovered.length === 0) {
       return {
         file: '(none)',

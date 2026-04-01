@@ -88,6 +88,28 @@ describe('lintTool', () => {
     expect(result.ruleCount).toBeGreaterThan(0);
   });
 
+  it('auto-discovers .claude/agents files when no runtime memory file exists', () => {
+    const agentsDir = join(tmpDir, '.claude', 'agents');
+    mkdirSync(agentsDir, { recursive: true });
+    writeFileSync(
+      join(agentsDir, 'test-runner.md'),
+      [
+        '---',
+        'name: test-runner',
+        'description: Use proactively for running tests and fixing failures.',
+        '---',
+        '',
+        'You are an expert in test automation. Focus on running the smallest relevant test coverage first. When you see code changes, run the relevant tests.',
+      ].join('\n'),
+    );
+
+    const result = lintTool(tmpDir);
+
+    expect(result.file).toBe(join('.claude', 'agents', 'test-runner.md'));
+    expect(result.ruleCount).toBeGreaterThan(0);
+    expect(result.rules.some((rule) => rule.text.includes('Focus on running'))).toBe(true);
+  });
+
   it('uses explicit file path when provided', () => {
     const subDir = join(tmpDir, 'sub');
     mkdirSync(subDir, { recursive: true });

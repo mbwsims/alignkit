@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   discoverInstructionFiles,
+  discoverLintTargets,
   discoverInstructionTargets,
   parseInstructionFile,
 } from '../../src/parsers/auto-detect.js';
@@ -31,6 +32,16 @@ globs:
 
 - Use TypeScript strict mode.
 - Never use \`any\`.
+`;
+const CLAUDE_AGENT_CONTENT = `---
+name: test-runner
+description: Use proactively for running tests and fixing failures.
+tools:
+  - Bash
+  - Edit
+---
+
+You are an expert in test automation. Focus on running the smallest relevant test coverage first. When you see code changes, run the relevant tests. If tests fail, analyze failures and fix them while preserving intent.
 `;
 
 describe('discoverInstructionFiles', () => {
@@ -101,6 +112,13 @@ describe('discoverInstructionFiles', () => {
     expect(files[0].relativePath).toBe('.claude/rules/frontend.md');
   });
 
+  it('finds .claude/agents/*.md files', () => {
+    writeFile(tmpDir, '.claude/agents/test-runner.md', CLAUDE_AGENT_CONTENT);
+    const files = discoverInstructionFiles(tmpDir);
+    expect(files).toHaveLength(1);
+    expect(files[0].relativePath).toBe('.claude/agents/test-runner.md');
+  });
+
   it('returns primary file first by priority when both CLAUDE.md and .cursorrules exist', () => {
     writeFile(tmpDir, 'CLAUDE.md', CLAUDE_MD_CONTENT);
     writeFile(tmpDir, '.cursorrules', CURSORRULES_CONTENT);
@@ -154,6 +172,17 @@ describe('discoverInstructionTargets', () => {
       'AGENTS.md',
       'apps/api/CLAUDE.md',
     ]);
+  });
+
+  it('keeps subagent files out of default operational targets but includes them for lint', () => {
+    writeFile(tmpDir, 'CLAUDE.md', CLAUDE_MD_CONTENT);
+    writeFile(tmpDir, '.claude/agents/test-runner.md', CLAUDE_AGENT_CONTENT);
+
+    const targets = discoverInstructionTargets(tmpDir).map((file) => file.relativePath);
+    const lintTargets = discoverLintTargets(tmpDir).map((file) => file.relativePath);
+
+    expect(targets).toEqual(['CLAUDE.md']);
+    expect(lintTargets).toEqual(['CLAUDE.md', '.claude/agents/test-runner.md']);
   });
 });
 
@@ -214,6 +243,21 @@ describe('parseInstructionFile', () => {
     const rules = parseInstructionFile(AGENTS_MD_CONTENT, '/project/AGENTS.md');
     expect(rules.length).toBeGreaterThan(0);
     expect(rules.every((r) => r.source.file === '/project/AGENTS.md')).toBe(true);
+  });
+
+  it('parses .claude/agents prose instructions and strips frontmatter', () => {
+    const rules = parseInstructionFile(
+      CLAUDE_AGENT_CONTENT,
+      '/project/.claude/agents/test-runner.md',
+    );
+    const texts = rules.map((rule) => rule.text);
+
+    expect(texts).toContain('Focus on running the smallest relevant test coverage first.');
+    expect(texts).toContain('When you see code changes, run the relevant tests.');
+    expect(texts).toContain(
+      'If tests fail, analyze failures and fix them while preserving intent.',
+    );
+    expect(texts.some((text) => text.includes('name: test-runner'))).toBe(false);
   });
 
   it('falls back to parseClaudeMd for unknown filenames', () => {

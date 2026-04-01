@@ -17,6 +17,10 @@ export function isClaudeRulesFilePath(filePath: string): boolean {
   return normalizeInstructionPath(filePath).includes('/.claude/rules/');
 }
 
+export function isClaudeAgentFilePath(filePath: string): boolean {
+  return normalizeInstructionPath(filePath).includes('/.claude/agents/');
+}
+
 export function resolveRulesBaseDir(
   filePath: string,
   kind: 'cursor' | 'claude',

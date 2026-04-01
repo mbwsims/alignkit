@@ -61,6 +61,27 @@ describe('advisePlacement', () => {
     expect(diagnostic?.message).toContain('.claude/agents/');
   });
 
+  it('does not recommend subagents for rules already defined inside .claude/agents', () => {
+    const [result] = advisePlacement(
+      [
+        makeRule(
+          'When debugging production issues, first capture logs, then isolate a minimal reproduction, then write a failing test, then apply the smallest safe fix.',
+          {
+            source: {
+              file: '/repo/.claude/agents/debugger.md',
+              lineStart: 8,
+              lineEnd: 8,
+              section: null,
+            },
+          },
+        ),
+      ],
+      '/repo',
+    );
+
+    expect(result.diagnostics.some((d) => d.code === 'PLACEMENT')).toBe(false);
+  });
+
   it('does not recommend scoped rules for already scoped instructions', () => {
     const [result] = advisePlacement(
       [

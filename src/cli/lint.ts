@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Command } from 'commander';
 import { loadConfig } from '../config/loader.js';
-import { discoverInstructionFiles, discoverInstructionTargets } from '../parsers/auto-detect.js';
+import { discoverInstructionFiles, discoverLintTargets } from '../parsers/auto-detect.js';
 import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { detectVague } from '../analyzers/vague-detector.js';
 import { detectDuplicates } from '../analyzers/duplicate-detector.js';
@@ -44,7 +44,7 @@ export function registerLintCommand(program: Command): void {
           process.exit(1);
         }
         // Analyze each effective target once
-        filesToAnalyze = discoverInstructionTargets(cwd).map((f) => f.absolutePath);
+        filesToAnalyze = discoverLintTargets(cwd).map((f) => f.absolutePath);
       }
 
       // Select reporter

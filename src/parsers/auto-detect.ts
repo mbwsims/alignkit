@@ -3,9 +3,11 @@ import { globbySync } from 'globby';
 import type { Rule } from './types.js';
 import { parseClaudeMd } from './claude-md.js';
 import { parseClaudeRules } from './claude-rules.js';
+import { parseClaudeAgent } from './claude-agent.js';
 import { parseAgentsMd } from './agents-md.js';
 import { parseCursorrules } from './cursorrules.js';
 import {
+  isClaudeAgentFilePath,
   isClaudeMemoryFilePath,
   isClaudeRulesFilePath,
   isCursorRulesFilePath,
@@ -39,6 +41,7 @@ export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
     '**/CLAUDE.local.md',
     '**/.claude/rules/**/*.md',
     '**/.claude/rules/**/*.mdc',
+    '**/.claude/agents/**/*.md',
     '**/AGENTS.md',
     '**/.cursorrules',
     '**/.cursor/rules',
@@ -76,8 +79,10 @@ export function discoverInstructionFiles(cwd: string): DiscoveredFile[] {
   return files;
 }
 
-export function discoverInstructionTargets(cwd: string): DiscoveredFile[] {
-  const discovered = discoverInstructionFiles(cwd);
+function filterDiscoveredTargets(
+  discovered: DiscoveredFile[],
+  options: { includeAgentFiles?: boolean } = {},
+): DiscoveredFile[] {
   const primaryClaudeFileByDir = new Map<string, string>();
   const hasClaudeMemoryTargets = discovered.some((file) => isClaudeMemoryFilePath(file.absolutePath));
 
@@ -96,12 +101,25 @@ export function discoverInstructionTargets(cwd: string): DiscoveredFile[] {
   }
 
   return discovered.filter((file) => {
+    if (isClaudeAgentFilePath(file.absolutePath)) {
+      return options.includeAgentFiles ?? false;
+    }
     if (hasClaudeMemoryTargets && isClaudeRulesFilePath(file.absolutePath)) {
       return false;
     }
     if (!isClaudeMemoryFilePath(file.absolutePath)) return true;
     const dirKey = path.dirname(file.relativePath);
     return primaryClaudeFileByDir.get(dirKey) === file.relativePath;
+  });
+}
+
+export function discoverInstructionTargets(cwd: string): DiscoveredFile[] {
+  return filterDiscoveredTargets(discoverInstructionFiles(cwd));
+}
+
+export function discoverLintTargets(cwd: string): DiscoveredFile[] {
+  return filterDiscoveredTargets(discoverInstructionFiles(cwd), {
+    includeAgentFiles: true,
   });
 }
 
@@ -118,6 +136,9 @@ export function parseInstructionFile(content: string, filePath: string, cwd?: st
     case 'rules':
       return parseCursorrules(content, filePath, cwd);
     default:
+      if (isClaudeAgentFilePath(filePath)) {
+        return parseClaudeAgent(content, filePath);
+      }
       if (isClaudeRulesFilePath(filePath)) {
         return parseClaudeRules(content, filePath, cwd);
       }

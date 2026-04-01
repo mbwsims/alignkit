@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { Diagnostic, PlacementSuggestion, Rule } from '../parsers/types.js';
-import { normalizeInstructionPath } from '../parsers/instruction-paths.js';
+import { isClaudeAgentFilePath, normalizeInstructionPath } from '../parsers/instruction-paths.js';
 
 interface HookSuggestion {
   event: string;
@@ -150,7 +150,7 @@ function countSequenceMarkers(text: string): number {
 }
 
 function suggestSubagent(rule: Rule): SubagentSuggestion | null {
-  if (rule.applicability || rule.text.length < 90) {
+  if (rule.applicability || rule.text.length < 90 || isClaudeAgentFilePath(rule.source.file)) {
     return null;
   }
 

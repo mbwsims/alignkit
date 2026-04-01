@@ -57,7 +57,7 @@ function stripLeadingFormatting(text: string): string {
  * Determine if text is a normative instruction (vs documentation/reference).
  * Uses both text content and section context.
  */
-function isNormative(text: string, section: string | null = null): boolean {
+export function isNormativeText(text: string, section: string | null = null): boolean {
   const normalized = stripLeadingFormatting(text);
 
   // Filter out documentation patterns first — these are never rules
@@ -84,7 +84,7 @@ function isNormative(text: string, section: string | null = null): boolean {
  * sentences contain a split verb AND the first sentence does NOT start with
  * a conditional prefix.
  */
-function splitCompoundRule(text: string): string[] {
+export function splitCompoundRule(text: string): string[] {
   // Split on sentence boundaries: ". " followed by an uppercase letter
   const sentencePattern = /(?<=\.\s)(?=[A-Z])/;
   const sentences = text.split(sentencePattern);
@@ -130,7 +130,7 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
     if (!joined || joined.length < MIN_RULE_LENGTH) return;
 
     // Only add if the paragraph contains normative (imperative) language
-    if (isNormative(joined, currentSection)) {
+    if (isNormativeText(joined, currentSection)) {
       rawRules.push({
         text: joined,
         section: currentSection,
@@ -175,7 +175,7 @@ export function parseMarkdown(content: string, filePath: string): Rule[] {
       // Only add list items that contain normative language.
       // This filters out documentation items like "**Framework:** Next.js 16"
       // and command references like "`pnpm dev` — Start dev server".
-      if (itemText.length >= MIN_RULE_LENGTH && isNormative(itemText, currentSection)) {
+      if (itemText.length >= MIN_RULE_LENGTH && isNormativeText(itemText, currentSection)) {
         rawRules.push({
           text: itemText,
           section: currentSection,
