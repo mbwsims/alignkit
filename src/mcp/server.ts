@@ -7,7 +7,7 @@ import { statusTool } from './tools/status.js';
 
 const server = new McpServer({
   name: 'alignkit',
-  version: '0.1.4',
+  version: '0.1.5',
 });
 
 server.tool(
