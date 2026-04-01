@@ -272,13 +272,6 @@ npx alignkit check --format json
 
 **Check --deep** sends unresolved rules + session action summaries to the LLM for evaluation, covering rules that pattern matching cannot handle well on their own.
 
-## Current strengths
-
-- **`check` is the most differentiated part of the product.** It does more than lint rule text: it estimates whether Claude actually followed your instructions in real sessions.
-- **`lint` covers a wider instruction surface than a single `CLAUDE.md`.** It now understands effective Claude memory, scoped rules, subagents, and project skills.
-- **Placement advice reflects the modern Claude workflow model.** alignkit can flag when a rule belongs in scoped memory, a skill, a hook, a subagent, or actual tool config instead of global memory.
-- **Adherence reporting is intentionally explicit.** Every rule shows sample size, method, and confidence, and unresolved or inconclusive rules are surfaced instead of being quietly treated as verified.
-
 ## Current limitations
 
 - **`check` is still an evidence system, not an enforcement system.** It can tell you what likely happened in observed sessions, but it cannot prove compliance in the abstract.
