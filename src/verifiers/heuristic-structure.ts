@@ -301,6 +301,76 @@ const CHECKS: StructureCheck[] = [
       };
     },
   },
+  // --- JSDoc / documentation comments ---
+  {
+    matches: (t) =>
+      /\bjsdoc\b/i.test(t) ||
+      /\bdocument\s+(?:all\s+)?(?:functions?|methods?|classes?|exports?)/i.test(t) ||
+      /\badd\s+(?:jsdoc|doc)\s+comments?/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions);
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No code files were written or edited.' };
+      }
+      const jsdocFile = contents.find((file) => /\/\*\*[\s\S]*?\*\//.test(file.content));
+      return {
+        relevant: true,
+        followed: jsdocFile !== undefined,
+        evidence: jsdocFile
+          ? `${jsdocFile.filePath} contains JSDoc comments.`
+          : `Checked ${contents.length} code file(s); no JSDoc comments found.`,
+      };
+    },
+  },
+  // --- Explicit return types ---
+  {
+    matches: (t) =>
+      /\bexplicit\s+return\s+type/i.test(t) ||
+      /\breturn\s+type\s+annotation/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions).filter(
+        (file) => /\.(ts|tsx)$/.test(file.filePath),
+      );
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No TypeScript files were written or edited.' };
+      }
+      const missingReturnType = contents.find((file) =>
+        /export\s+(?:async\s+)?function\s+\w+\s*\([^)]*\)\s*\{/.test(file.content),
+      );
+      return {
+        relevant: true,
+        followed: !missingReturnType,
+        evidence: missingReturnType
+          ? `${missingReturnType.filePath} has an exported function without an explicit return type.`
+          : `Checked ${contents.length} TypeScript file(s); all exported functions have return type annotations.`,
+      };
+    },
+  },
+  // --- Barrel exports / index files ---
+  {
+    matches: (t) =>
+      /\bbarrel\s+export/i.test(t) ||
+      /\bindex\s+file/i.test(t) ||
+      /\bre-?export/i.test(t),
+    verify: (actions) => {
+      const contents = codeWriteContents(actions).filter(
+        (file) => /\/index\.(ts|js)$/.test(file.filePath),
+      );
+      if (contents.length === 0) {
+        return { relevant: false, followed: null, evidence: 'No index files were written or edited.' };
+      }
+      const barrelFile = contents.find((file) =>
+        /\bexport\s+\{/.test(file.content) || /\bexport\s+\*\s+from/.test(file.content),
+      );
+      return {
+        relevant: true,
+        followed: barrelFile !== undefined,
+        evidence: barrelFile
+          ? `${barrelFile.filePath} contains re-exports.`
+          : `Checked ${contents.length} index file(s); no barrel export patterns found.`,
+      };
+    },
+  },
 ];
 
 export function matchesHeuristicStructureRule(text: string): boolean {

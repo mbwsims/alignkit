@@ -40,8 +40,14 @@ describe('autoMap', () => {
     expect(fn).not.toBeNull();
   });
 
-  it('does not auto-map architectural framework rules just because they mention a tool', () => {
+  it('maps rules mentioning a known tool to bash-keyword', () => {
     const rule = makeRule('Use Prisma for all data access', { category: 'tool-constraint' });
+    const fn = autoMap(rule);
+    expect(fn).not.toBeNull();
+  });
+
+  it('does not auto-map rules with no tool or command signals', () => {
+    const rule = makeRule('Keep functions small and focused', { category: 'tool-constraint' });
     const fn = autoMap(rule);
     expect(fn).toBeNull();
   });

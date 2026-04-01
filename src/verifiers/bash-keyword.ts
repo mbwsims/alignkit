@@ -8,8 +8,13 @@ const TOOL_CATEGORIES: string[][] = [
   ['jest', 'mocha', 'vitest', 'ava'],
   ['git'],
   ['docker', 'podman'],
-  ['eslint', 'prettier', 'biome'],
+  ['eslint', 'prettier', 'biome', 'oxlint'],
   ['webpack', 'vite', 'turbopack', 'esbuild'],
+  ['playwright', 'cypress', 'puppeteer'],
+  ['turbo', 'nx', 'lerna'],
+  ['psql', 'mysql', 'sqlite3'],
+  ['typedoc', 'jsdoc'],
+  ['sass', 'less', 'postcss'],
 ];
 
 /** Individual tool keywords that can appear in bash commands. */
@@ -17,11 +22,19 @@ const KNOWN_TOOLS = [
   'pnpm', 'npm', 'yarn', 'bun', 'npx',
   'jest', 'mocha', 'vitest', 'ava', 'pytest',
   'git', 'docker', 'podman',
-  'eslint', 'prettier', 'biome',
+  'eslint', 'prettier', 'biome', 'oxlint', 'stylelint',
   'webpack', 'vite', 'turbopack', 'esbuild',
   'prisma', 'tsc', 'node', 'deno',
   'pip', 'cargo', 'go', 'make', 'brew', 'apt',
   'next', 'nuxt', 'remix',
+  'playwright', 'cypress', 'puppeteer',
+  'turbo', 'nx', 'lerna',
+  'terraform', 'kubectl', 'helm',
+  'psql', 'mysql', 'mongosh', 'redis-cli',
+  'storybook', 'tailwind', 'postcss',
+  'typedoc', 'jsdoc',
+  'commitlint', 'husky', 'lint-staged',
+  'curl', 'ssh', 'rsync',
 ];
 
 /**

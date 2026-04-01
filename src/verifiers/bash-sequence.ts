@@ -12,6 +12,17 @@ const ACTION_PATTERNS: [string, RegExp][] = [
   ['install', /\b(pnpm\s+install|npm\s+install|yarn\s+install|pip\s+install)\b/i],
   ['format', /\b(prettier|biome\s+format|pnpm\s+format)\b/i],
   ['typecheck', /\b(tsc\s+--noEmit|pnpm\s+typecheck|npm\s+run\s+typecheck)\b/i],
+  ['deploy', /\b(deploy|vercel|netlify|firebase\s+deploy|fly\s+deploy|railway|gh-pages)\b/i],
+  ['migrate', /\b(prisma\s+migrate|knex\s+migrate|typeorm\s+migration|sequelize.*migrate|migrate)\b/i],
+  ['generate', /\b(prisma\s+generate|pnpm\s+generate|npm\s+run\s+generate|openapi-generator|codegen)\b/i],
+  ['clean', /\b(pnpm\s+clean|npm\s+run\s+clean|rm\s+-rf\s+(?:dist|build|node_modules)|rimraf)\b/i],
+  ['check', /\b(pnpm\s+check|npm\s+run\s+check|biome\s+check)\b/i],
+  ['validate', /\b(pnpm\s+validate|npm\s+run\s+validate|validate)\b/i],
+  ['backup', /\b(pg_dump|mysqldump|backup|snapshot)\b/i],
+  ['start', /\b(pnpm\s+start|npm\s+start|yarn\s+start|pm2\s+start)\b/i],
+  ['stop', /\b(pm2\s+stop|docker\s+stop|docker-compose\s+down)\b/i],
+  ['review', /\b(gh\s+pr\s+review|gh\s+pr\s+create|code\s+review)\b/i],
+  ['document', /\b(typedoc|jsdoc|pnpm\s+docs|npm\s+run\s+docs)\b/i],
 ];
 
 /** Ordering keywords and the order they imply: [before-phrase, after-phrase]. */
@@ -56,6 +67,12 @@ function resolveAction(phrase: string): RegExp | null {
   if (/\bpush/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'push')![1];
   if (/\bbuild/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'build')![1];
   if (/\blint/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'lint')![1];
+  if (/\bdeploy/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'deploy')![1];
+  if (/\bmigrat/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'migrate')![1];
+  if (/\bgenerat/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'generate')![1];
+  if (/\bclean/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'clean')![1];
+  if (/\bvalidat/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'validate')![1];
+  if (/\bbackup/i.test(lower)) return ACTION_PATTERNS.find(([n]) => n === 'backup')![1];
   return null;
 }
 

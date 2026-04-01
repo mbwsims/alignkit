@@ -50,7 +50,7 @@ alignkit is most useful if you:
 
 alignkit is probably overkill if you:
 
-- just want a better starter `CLAUDE.md`
+- only need a starter `CLAUDE.md` and nothing beyond that
 - only need occasional in-Claude auditing and memory cleanup
 - do not care about history-backed adherence or structured lint output
 
@@ -276,7 +276,7 @@ npx alignkit check --format json
 
 - **`check` is the most differentiated part of the product.** It does more than lint rule text: it estimates whether Claude actually followed your instructions in real sessions.
 - **`lint` covers a wider instruction surface than a single `CLAUDE.md`.** It now understands effective Claude memory, scoped rules, subagents, and project skills.
-- **Placement advice reflects the modern Claude workflow model.** AlignKit can flag when a rule belongs in scoped memory, a skill, a hook, a subagent, or actual tool config instead of global memory.
+- **Placement advice reflects the modern Claude workflow model.** alignkit can flag when a rule belongs in scoped memory, a skill, a hook, a subagent, or actual tool config instead of global memory.
 - **Adherence reporting is intentionally explicit.** Every rule shows sample size, method, and confidence, and unresolved or inconclusive rules are surfaced instead of being quietly treated as verified.
 
 ## Current limitations
@@ -325,13 +325,7 @@ Optional. Everything works with zero configuration.
 {
   "instructionFile": "./CLAUDE.md",
   "thresholds": { "tokenBudget": 2000, "flagBelow": 20 },
-  "contextWindow": 200000,
-  "rules": {
-    "always-add-error-handling": {
-      "verifier": "custom",
-      "check": "grep:catch|try|\\.catch in write:src/routes/**"
-    }
-  }
+  "contextWindow": 200000
 }
 ```
 

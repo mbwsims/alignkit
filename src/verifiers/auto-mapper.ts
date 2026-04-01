@@ -53,7 +53,9 @@ function hasDirectCommandSignals(text: string): boolean {
   if (/\b(?:run|execute|invoke)\s+\S+/i.test(text)) return true;
   if (/\b(?:git|docker)\b/i.test(text)) return true;
 
-  const commandTools = /\b(?:pnpm|npm|yarn|bun|npx|pip|brew|apt|cargo|make|pytest|jest|vitest|mocha|eslint|prettier|biome|tsc)\b/i;
-  const commandContexts = /\b(?:package management|dependencies|dependency|install|script|scripts|test|tests|testing|lint|format|build|typecheck|commit|push)\b/i;
-  return commandTools.test(text) && commandContexts.test(text);
+  // If any known tool name appears in the rule text, route to bash-keyword.
+  // The verifier itself handles relevance gracefully (returns relevant: false
+  // when the tool is not encountered in the session).
+  const knownTools = /\b(?:pnpm|npm|yarn|bun|npx|pip|brew|apt|cargo|make|pytest|jest|vitest|mocha|eslint|prettier|biome|webpack|vite|turbopack|esbuild|prisma|tsc|node|deno|next|nuxt|remix|docker|podman|terraform|kubectl|playwright|cypress|turbo|nx|storybook|tailwind|typedoc|commitlint|husky|lint-staged|stylelint|psql|mysql|mongosh|curl|ssh)\b/i;
+  return knownTools.test(text);
 }
