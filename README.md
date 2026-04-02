@@ -2,7 +2,7 @@
 
 Instruction intelligence for coding agents.
 
-You write a `CLAUDE.md` to shape how coding agents behave in your codebase. But you have no easy way to know whether those rules are well-structured, whether the agent actually follows them, or which rules are wasting tokens. alignkit gives you that visibility.
+You write a CLAUDE.md to control how coding agents work in your codebase. But you have no way to tell if your rules are well-structured, whether the agent actually follows them, or which rules are wasting tokens. alignkit gives you that visibility.
 
 alignkit is currently in beta. It is optimized for Claude Code projects, with broader lint support for related instruction formats such as `AGENTS.md`, `.cursor/rules`, `.claude/agents`, and `.claude/skills`.
 
