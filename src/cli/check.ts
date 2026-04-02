@@ -13,6 +13,7 @@ import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { HistoryStore } from '../history/store.js';
 import { serializeObservation } from '../verifiers/types.js';
 import type { SessionResult } from '../history/types.js';
+import { createDeepSpinner } from './spinner.js';
 
 function getFileSince(filePath: string, cwd: string): Date {
   // Try git log for last commit date of file
@@ -55,6 +56,7 @@ function formatTerminalOutput(
   sinceDate: Date,
   sessionCount: number,
   adherenceData: ReturnType<typeof aggregateAdherence>,
+  usedDeep = false,
 ): string {
   const lines: string[] = [];
 
@@ -64,6 +66,19 @@ function formatTerminalOutput(
   lines.push('');
   lines.push(pc.bold('RULE ADHERENCE:'));
   lines.push('');
+
+  // If no rules were exercised in any session, skip the table entirely
+  const allUnexercised = adherenceData.every((item) => item.relevantCount === 0);
+  if (allUnexercised && adherenceData.length > 0) {
+    lines.push(`  ${adherenceData.length} rules tracked. None were exercised in ${sessionCount} session${sessionCount === 1 ? '' : 's'}.`);
+    lines.push('');
+    if (usedDeep) {
+      lines.push(pc.dim('  Even with LLM analysis, no rule activity was found. More sessions will produce data.'));
+    } else {
+      lines.push(pc.dim('  More sessions will produce data, or use --deep for LLM-based verification.'));
+    }
+    return lines.join('\n');
+  }
 
   // Table header
   const cols = {
@@ -110,17 +125,20 @@ function formatTerminalOutput(
 
     if (item.relevantCount === 0) {
       followedStr = '-';
-      adherenceStr = '-';
+      adherenceStr = '-'.padEnd(cols.adherence);
       notExercised++;
     } else if (item.resolvedCount === 0) {
       followedStr = '-';
-      adherenceStr = '?';
+      adherenceStr = '?'.padEnd(cols.adherence);
       inconclusive++;
     } else {
       followedStr = `${item.followedCount}/${item.resolvedCount}`;
       const pct = Math.round((item.adherence ?? 0) * 100);
-      const icon = pct === 100 ? pc.green(' \u2713') : pct >= 80 ? pc.yellow(' ~') : pc.red(' \u2717');
-      adherenceStr = `${pct}%${icon}`;
+      const pctStr = `${pct}%`;
+      const icon = pct === 100 ? pc.green('\u2713') : pct >= 80 ? pc.yellow('~') : pc.red('\u2717');
+      // Pad the plain text first, then append the colored icon
+      // so ANSI escape codes don't throw off column alignment
+      adherenceStr = `${pctStr.padEnd(cols.adherence - 2)}${icon} `;
     }
 
     if (item.relevantCount === 0) {
@@ -145,7 +163,7 @@ function formatTerminalOutput(
         sessionsStr.padEnd(cols.sessions) +
         resolvedStr.padEnd(cols.resolved) +
         followedStr.padEnd(cols.followed) +
-        adherenceStr.padEnd(cols.adherence) +
+        adherenceStr +
         item.confidence.padEnd(cols.confidence) +
         item.method,
     );
@@ -250,7 +268,7 @@ export function registerCheckCommand(program: Command): void {
       } else {
         const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
-          console.error('Error: No instruction files found.');
+          console.error('No instruction files found. Run `alignkit init` to create one.');
           process.exit(1);
         }
         filePath = discovered[0].absolutePath;
@@ -287,12 +305,27 @@ export function registerCheckCommand(program: Command): void {
       let unresolvedRuleNames: string[] = [];
 
       for (const session of sessions) {
-        if (!options.fresh && store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) {
-          continue;
+        const alreadyCached = store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION);
+
+        // Skip if already cached, unless:
+        // - --fresh was passed (reprocess everything)
+        // - --deep was passed and the cached session has no LLM observations (upgrade it)
+        if (alreadyCached && !options.fresh) {
+          if (options.deep) {
+            // Check if cached session already has LLM observations
+            const cached = store.queryByEpoch(rulesVersion, ANALYSIS_VERSION)
+              .find((r) => r.sessionId === session.sessionId);
+            const hasLLM = cached?.observations.some((o) => o.method === 'llm-judge');
+            if (hasLLM) continue; // already deep-verified, skip
+            // Otherwise, reprocess with LLM
+            store.removeSession(session.sessionId, rulesVersion, ANALYSIS_VERSION);
+          } else {
+            continue;
+          }
         }
 
         // When --fresh, remove old entry before re-appending
-        if (options.fresh && store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) {
+        if (alreadyCached && options.fresh) {
           store.removeSession(session.sessionId, rulesVersion, ANALYSIS_VERSION);
         }
 
@@ -309,18 +342,27 @@ export function registerCheckCommand(program: Command): void {
         // LLM evaluation: run if --deep was explicitly passed
         if (options.deep && unresolvedRules.length > 0) {
           if (process.env.ANTHROPIC_API_KEY) {
-            const llmObservations = await verifyWithLLM(
-              unresolvedRules,
-              session.actions,
-              session.sessionId,
-            );
+            const spinner = options.format === 'terminal'
+              ? createDeepSpinner()
+              : null;
+            try {
+              const llmObservations = await verifyWithLLM(
+                unresolvedRules,
+                session.actions,
+                session.sessionId,
+              );
 
-            if (llmObservations.length > 0) {
-              const llmRuleIds = new Set(llmObservations.map((o) => o.ruleId));
-              observations = [
-                ...observations.filter((o) => !llmRuleIds.has(o.ruleId)),
-                ...llmObservations,
-              ];
+              if (llmObservations.length > 0) {
+                const llmRuleIds = new Set(llmObservations.map((o) => o.ruleId));
+                observations = [
+                  ...observations.filter((o) => !llmRuleIds.has(o.ruleId)),
+                  ...llmObservations,
+                ];
+              }
+              spinner?.succeed(`Deep analysis complete (session ${processedCount + 1}/${sessions.length})`);
+            } catch (err) {
+              spinner?.fail('Deep analysis failed');
+              throw err;
             }
           } else {
             process.stderr.write(
@@ -365,7 +407,7 @@ export function registerCheckCommand(program: Command): void {
           console.log(formatMarkdownOutput(relPath, sinceDate, totalSessions, adherenceData));
           break;
         default:
-          console.log(formatTerminalOutput(relPath, sinceDate, totalSessions, adherenceData));
+          console.log(formatTerminalOutput(relPath, sinceDate, totalSessions, adherenceData, !!options.deep));
           break;
       }
 

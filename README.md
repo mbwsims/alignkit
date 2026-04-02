@@ -18,9 +18,9 @@ npx alignkit
 
 **`alignkit init`** — generates a starter `CLAUDE.md` if you don't have one yet. Detects your stack (framework, test runner, database, styling, package manager) and assembles rules from templates. With `--deep`, uses an LLM for a more tailored result.
 
-**`alignkit optimize`** — generates an improved instruction file based on lint diagnostics and adherence data. Never modifies the original. With `--deep`, adds LLM-powered consolidation.
+**`alignkit optimize`** — generates an improved instruction file based on lint diagnostics and adherence data. Never modifies the original. With `--deep`, uses an LLM to consolidate overlapping rules.
 
-`check`, `lint`, `init`, and `optimize` all support `--deep` for LLM-powered analysis. Requires `ANTHROPIC_API_KEY`.
+`check`, `lint`, `init`, and `optimize` support `--deep` for LLM-powered analysis. Requires `ANTHROPIC_API_KEY`.
 
 ### History-based commands
 
@@ -123,11 +123,10 @@ CLAUDE.md — 34 rules, ~1,200 tokens (estimated)
 HEALTH  34 rules, 22 auto-verifiable, 3 vague, 1 linter-job, 1 weak-emphasis
 TOKENS  ~1,200 (~0.6% of context window). Recommended: under 2,000.
 
-QUICK WINS
-  → Merge 1 redundant rule pair → run alignkit optimize
-  → Move 5 high-priority rules to top of file → run alignkit optimize
-  → Move 1 formatting rule to linter/formatter config
-  → Strengthen 1 critical rule with emphatic language (MUST, NEVER, ALWAYS)
+NEXT STEPS
+  1. Run alignkit optimize to fix ordering, merge 1 duplicate pair
+  2. Move 1 formatting rule to linter config
+  3. Strengthen 1 critical rule with MUST/NEVER/ALWAYS
 ```
 
 ### `alignkit lint --deep`
@@ -267,7 +266,7 @@ npx alignkit check --format json
 | `init --deep` | Project metadata (directory names, dependency names, scripts). **Not** source code. |
 | `lint --deep` | Rule text + project metadata (directory names, dependency names). **Not** source code. |
 | `check --deep` | Rule text + session action summaries (commands run, files written). |
-| `optimize --deep` | Rule text + adherence data for LLM-powered consolidation. |
+| `optimize --deep` | Rule text + project metadata for LLM-powered consolidation. |
 
 All require `ANTHROPIC_API_KEY`. If you never set it, nothing ever leaves your machine.
 

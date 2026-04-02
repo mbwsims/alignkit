@@ -95,13 +95,9 @@ describe('check command', () => {
     expect(stdout).toContain('Auto-detected');
     expect(stdout).toContain('CLAUDE.md');
     expect(stdout).toContain('RULE ADHERENCE');
-    expect(stdout).toContain('Rule');
-    expect(stdout).toContain('Sessions');
-    expect(stdout).toContain('Resolved');
-    expect(stdout).toContain('Followed');
-    expect(stdout).toContain('Adherence');
-    expect(stdout).toContain('Confidence');
-    expect(stdout).toContain('Method');
+    // With no sessions, the compact "none exercised" message is shown instead of the full table
+    expect(stdout).toContain('rules tracked');
+    expect(stdout).toContain('None were exercised');
   });
 
   it('--format json outputs valid JSON with expected fields', () => {

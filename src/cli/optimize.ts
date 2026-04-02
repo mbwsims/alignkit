@@ -13,6 +13,8 @@ import { deduplicateRules } from '../optimizer/deduplicator.js';
 import { reorderRules } from '../optimizer/reorderer.js';
 import { flagRules } from '../optimizer/flagger.js';
 import { writeDiff } from '../optimizer/diff-writer.js';
+import { analyzeDeep } from '../analyzers/deep-analyzer.js';
+import { createDeepSpinner } from './spinner.js';
 
 /**
  * Compute per-rule adherence and relevance maps from session history.
@@ -202,7 +204,6 @@ const CATEGORY_PRIORITY: Record<string, number> = {
 };
 
 function reorderByPriority(rules: Rule[]): Rule[] {
-  // Group by section, reorder within each section
   const sections = new Map<string | null, Rule[]>();
   for (const rule of rules) {
     const section = rule.source.section;
@@ -234,7 +235,7 @@ export function registerOptimizeCommand(program: Command): void {
     .command('optimize [file]')
     .description('Optimize instruction file based on adherence data')
     .option('--prune', 'Remove rules that were never relevant')
-    .option('--deep', 'Add LLM consolidation step')
+    .option('--deep', 'Use LLM to consolidate overlapping rules (requires ANTHROPIC_API_KEY)')
     .option('--format <format>', 'Output format', 'terminal')
     .action(async (file: string | undefined, options: { prune?: boolean; deep?: boolean; format: string }) => {
       const cwd = process.cwd();
@@ -247,7 +248,7 @@ export function registerOptimizeCommand(program: Command): void {
       } else {
         const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
-          console.error('Error: No instruction files found.');
+          console.error('No instruction files found. Run `alignkit init` to create one.');
           process.exit(1);
         }
         filePath = discovered[0].absolutePath;
@@ -259,7 +260,7 @@ export function registerOptimizeCommand(program: Command): void {
       const document = analyzeOptimizeTarget(filePath, cwd, graph);
       const originalRules = document.rules;
 
-      // 3. Load history if available (optimize works with or without session data)
+      // 3. Load history if available
       const alignkitDir = path.join(cwd, '.alignkit');
       const store = new HistoryStore(alignkitDir);
       const rulesVersion = graph.graphHash;
@@ -267,23 +268,74 @@ export function registerOptimizeCommand(program: Command): void {
       const hasSessionData = sessions.length > 0;
       const { adherenceMap, relevanceMap } = computeMaps(originalRules, sessions);
 
-      // Step 1: Deduplicate (always works — uses text similarity, not session data)
+      // Step 1: Deduplicate (always works — uses text similarity)
       const { rules: dedupedRules, deduped } = deduplicateRules(originalRules, adherenceMap);
 
       // Step 2: Reorder within sections
       // With session data: sort by adherence (highest first)
-      // Without session data: sort verifiable rules first, then by category priority
+      // Without: sort by category priority (tool constraints and process rules first)
       const reorderedRules = hasSessionData
         ? reorderRules(dedupedRules, adherenceMap)
         : reorderByPriority(dedupedRules);
 
-      // Step 3: Flag for review (only when we have session data to judge)
+      // Step 3: Deep consolidation — use LLM to merge overlapping rules
+      let consolidatedRules = reorderedRules;
+      let consolidationCount = 0;
+      let consolidationTokensSaved = 0;
+
+      if (options.deep) {
+        if (!process.env.ANTHROPIC_API_KEY) {
+          console.error('Error: --deep requires ANTHROPIC_API_KEY.\n');
+          console.error('  export ANTHROPIC_API_KEY=sk-ant-...\n');
+          console.error('Get a key at https://console.anthropic.com/settings/keys');
+          process.exit(1);
+        }
+        const spinner = options.format === 'terminal' ? createDeepSpinner() : null;
+        try {
+          const projectDir = path.dirname(filePath);
+          const deepResult = await analyzeDeep(reorderedRules, projectDir);
+          if (deepResult && deepResult.result.consolidation.length > 0) {
+            // Apply each consolidation: replace the first rule in the group
+            // with the merged text, remove the rest
+            const rulesToRemove = new Set<string>();
+            for (const merge of deepResult.result.consolidation) {
+              const matchedIds = merge.ruleIds
+                .map((idPrefix) => consolidatedRules.find((r) => r.id.startsWith(idPrefix))?.id)
+                .filter(Boolean) as string[];
+
+              if (matchedIds.length < 2) continue;
+
+              // Replace first rule's text with merged text
+              const firstId = matchedIds[0];
+              consolidatedRules = consolidatedRules.map((r) =>
+                r.id === firstId ? { ...r, text: merge.mergedText } : r,
+              );
+
+              // Mark the rest for removal
+              for (const id of matchedIds.slice(1)) {
+                rulesToRemove.add(id);
+              }
+
+              consolidationCount++;
+              consolidationTokensSaved += merge.tokenSavings;
+            }
+
+            consolidatedRules = consolidatedRules.filter((r) => !rulesToRemove.has(r.id));
+          }
+          spinner?.succeed('Deep consolidation complete');
+        } catch (err) {
+          spinner?.fail('Deep consolidation failed');
+          // Continue without consolidation
+        }
+      }
+
+      // Step 4: Flag rules (only meaningful with session data)
       const flagged = hasSessionData
-        ? flagRules(reorderedRules, adherenceMap, relevanceMap)
+        ? flagRules(consolidatedRules, adherenceMap, relevanceMap)
         : [];
 
-      // Step 4: Optionally prune never-relevant rules
-      let finalRules = reorderedRules;
+      // Step 5: Optionally prune never-relevant rules (requires session data)
+      let finalRules = consolidatedRules;
       if (options.prune && hasSessionData) {
         const neverRelevantIds = new Set(
           flagged.filter((f) => f.reason === 'never-relevant').map((f) => f.rule.id),
@@ -327,8 +379,8 @@ export function registerOptimizeCommand(program: Command): void {
         }, null, 2));
       } else {
         if (!hasSessionData) {
-          console.log(pc.dim('No session history found — optimizing based on structural analysis only.'));
-          console.log(pc.dim('Run `alignkit check` first for adherence-based optimization.'));
+          console.log(pc.dim('No session history — optimizing structure only (ordering, dedup).'));
+          console.log(pc.dim(`Run ${pc.cyan('alignkit check')} first for adherence-based optimization.`));
           console.log('');
         }
         if (document.hasExternalGraph) {
@@ -341,8 +393,13 @@ export function registerOptimizeCommand(program: Command): void {
           `Step ${stepNum++} \u2014 Deduplicate:      Merged ${deduped.length} near-duplicate rule pair${deduped.length === 1 ? '' : 's'} (saves ~${tokenSaved} tokens)`,
         );
         console.log(
-          `Step ${stepNum++} \u2014 Reorder:          ${hasSessionData ? 'Moved top-performing rules to top of each section' : 'Moved actionable rules (tool constraints, process ordering) to top of each section'}`,
+          `Step ${stepNum++} \u2014 Reorder:          ${hasSessionData ? 'Moved top-performing rules to top of each section' : 'Moved actionable rules (tool constraints, process ordering) to top'}`,
         );
+        if (options.deep) {
+          console.log(
+            `Step ${stepNum++} \u2014 Consolidate:      Merged ${consolidationCount} rule group${consolidationCount === 1 ? '' : 's'} via LLM (saves ~${consolidationTokensSaved} tokens)`,
+          );
+        }
         if (hasSessionData) {
           console.log(
             `Step ${stepNum++} \u2014 Flag for review:  ${flagged.length} rule${flagged.length === 1 ? '' : 's'} need${flagged.length === 1 ? 's' : ''} attention`,
