@@ -145,7 +145,7 @@ export function registerStatusCommand(program: Command): void {
       } else {
         const discovered = discoverInstructionTargets(cwd);
         if (discovered.length === 0) {
-          console.error('Error: No instruction files found.');
+          console.error('No instruction files found. Run `alignkit init` to create one.');
           process.exit(1);
         }
         filePath = discovered[0].absolutePath;

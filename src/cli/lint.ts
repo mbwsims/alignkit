@@ -19,6 +19,7 @@ import { JsonReporter } from '../reporters/json.js';
 import { MarkdownReporter } from '../reporters/markdown.js';
 import type { LintResult } from '../analyzers/types.js';
 import type { Reporter } from '../reporters/types.js';
+import { createDeepSpinner } from './spinner.js';
 
 export function registerLintCommand(program: Command): void {
   program
@@ -41,7 +42,7 @@ export function registerLintCommand(program: Command): void {
         filesToAnalyze = [path.resolve(cwd, file)];
       } else {
         if (discovered.length === 0) {
-          console.error('Error: No instruction files found.');
+          console.error('No instruction files found. Run `alignkit init` to create one.');
           process.exit(1);
         }
         // Analyze each effective target once
@@ -101,12 +102,19 @@ export function registerLintCommand(program: Command): void {
         // as project context, not CWD (they may differ when linting a file
         // in another directory)
         if (options.deep) {
-          const projectDir = path.dirname(filePath);
-          const deepResult = await analyzeDeep(rules, projectDir);
-          if (deepResult !== undefined) {
-            rules = deepResult.rules;
-            result.rules = deepResult.rules;
-            result.deepAnalysis = deepResult.result;
+          const spinner = options.format === 'terminal' ? createDeepSpinner() : null;
+          try {
+            const projectDir = path.dirname(filePath);
+            const deepResult = await analyzeDeep(rules, projectDir);
+            if (deepResult !== undefined) {
+              rules = deepResult.rules;
+              result.rules = deepResult.rules;
+              result.deepAnalysis = deepResult.result;
+            }
+            spinner?.succeed('Deep analysis complete');
+          } catch (err) {
+            spinner?.fail('Deep analysis failed');
+            throw err;
           }
         }
 

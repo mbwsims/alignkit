@@ -272,16 +272,18 @@ describe('llm-judge', () => {
   });
 
   describe('verifyWithLLM', () => {
-    it('returns empty array when ANTHROPIC_API_KEY is not set', async () => {
+    it('exits with error when ANTHROPIC_API_KEY is not set', async () => {
       delete process.env.ANTHROPIC_API_KEY;
 
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => { throw new Error(`process.exit(${code})`); });
       const { verifyWithLLM } = await import('../../src/verifiers/llm-judge.js');
 
-      const result = await verifyWithLLM([makeRule('Use pnpm')], sampleActions, 'session-1');
+      await expect(verifyWithLLM([makeRule('Use pnpm')], sampleActions, 'session-1')).rejects.toThrow('process.exit(1)');
 
-      expect(result).toEqual([]);
+      expect(exitSpy).toHaveBeenCalledWith(1);
       stderrSpy.mockRestore();
+      exitSpy.mockRestore();
     });
 
     it('returns empty array when no rules provided', async () => {

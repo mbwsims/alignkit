@@ -11,6 +11,7 @@ export interface DeepAnalysisResult {
     area: string;
     description: string;
     evidence: string;
+    suggestedRule?: string;
   }>;
   consolidation: Array<{
     ruleIds: string[];

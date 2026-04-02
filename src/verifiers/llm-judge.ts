@@ -150,8 +150,12 @@ export async function verifyWithLLM(
   sessionId: string,
 ): Promise<Observation[]> {
   if (!process.env.ANTHROPIC_API_KEY) {
-    process.stderr.write('ANTHROPIC_API_KEY not set. Skipping LLM evaluation.\n');
-    return [];
+    process.stderr.write(
+      'Error: --deep requires ANTHROPIC_API_KEY.\n\n' +
+      '  export ANTHROPIC_API_KEY=sk-ant-...\n\n' +
+      'Get a key at https://console.anthropic.com/settings/keys\n',
+    );
+    process.exit(1);
   }
 
   if (rules.length === 0) {

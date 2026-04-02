@@ -4,6 +4,7 @@ import pc from 'picocolors';
 import type { Command } from 'commander';
 import { detectStack } from '../generators/stack-detector.js';
 import { generateFromTemplates, generateFromLLM } from '../generators/init-generator.js';
+import { createDeepSpinner } from './spinner.js';
 
 export function registerInitCommand(program: Command): void {
   program
@@ -20,14 +21,19 @@ export function registerInitCommand(program: Command): void {
 
       if (options.deep) {
         if (!process.env.ANTHROPIC_API_KEY) {
-          console.error(pc.yellow('Warning: --deep requires ANTHROPIC_API_KEY. Falling back to template mode.'));
-          content = generateFromTemplates(stack);
+          console.error('Error: --deep requires ANTHROPIC_API_KEY.\n');
+          console.error('  export ANTHROPIC_API_KEY=sk-ant-...\n');
+          console.error('Get a key at https://console.anthropic.com/settings/keys');
+          process.exit(1);
         } else {
+          const spinner = createDeepSpinner();
           try {
             content = await generateFromLLM(stack, cwd);
+            spinner.succeed('Generated with deep analysis');
           } catch (err) {
+            spinner.fail('Deep analysis failed');
             const message = err instanceof Error ? err.message : String(err);
-            console.error(pc.yellow(`Warning: LLM generation failed (${message}). Falling back to template mode.`));
+            console.error(pc.yellow(`Falling back to template mode (${message}).`));
             content = generateFromTemplates(stack);
           }
         }

@@ -45,7 +45,7 @@ Return a JSON object with exactly these fields:
     { "ruleId": "<first 8 chars of rule ID>", "level": "HIGH|MEDIUM|LOW", "reason": "<1-2 sentence explanation>", "suggestedRewrite": "<concrete rewrite for LOW/vague rules, omit for HIGH>" }
   ],
   "coverageGaps": [
-    { "area": "<short area name, 2-4 words>", "description": "<what behavior is missing and why it matters>", "evidence": "<specific files, dependencies, or patterns that suggest this gap>" }
+    { "area": "<short area name, 2-4 words>", "description": "<what behavior is missing and why it matters>", "evidence": "<specific files, dependencies, or patterns that suggest this gap>", "suggestedRule": "<a concrete rule the user can paste into their file>" }
   ],
   "consolidation": [
     { "ruleIds": ["<id1>", "<id2>"], "mergedText": "<COMPLETE merged rule text, not truncated>", "tokenSavings": <estimated tokens saved as integer> }
@@ -168,9 +168,11 @@ export async function analyzeDeep(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     process.stderr.write(
-      'Warning: ANTHROPIC_API_KEY not set. Skipping deep analysis.\n',
+      'Error: --deep requires ANTHROPIC_API_KEY.\n\n' +
+      '  export ANTHROPIC_API_KEY=sk-ant-...\n\n' +
+      'Get a key at https://console.anthropic.com/settings/keys\n',
     );
-    return undefined;
+    process.exit(1);
   }
 
   const context = collectProjectContext(cwd);

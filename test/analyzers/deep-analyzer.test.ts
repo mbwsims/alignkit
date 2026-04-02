@@ -97,17 +97,19 @@ describe('analyzeDeep', () => {
     }
   });
 
-  it('returns undefined when ANTHROPIC_API_KEY is not set', async () => {
+  it('exits with error when ANTHROPIC_API_KEY is not set', async () => {
     delete process.env.ANTHROPIC_API_KEY;
 
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => { throw new Error(`process.exit(${code})`); });
     const { analyzeDeep } = await import('../../src/analyzers/deep-analyzer.js');
 
     const rules = [makeRule('Use pnpm, not npm')];
-    const result = await analyzeDeep(rules, '/tmp/test');
+    await expect(analyzeDeep(rules, '/tmp/test')).rejects.toThrow('process.exit(1)');
 
-    expect(result).toBeUndefined();
+    expect(exitSpy).toHaveBeenCalledWith(1);
     stderrSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 
   it('constructs prompt with all rule texts and project context', async () => {
