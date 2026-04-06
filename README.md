@@ -2,6 +2,8 @@
 
 Instruction intelligence for coding agents.
 
+> **Use as a Claude Code plugin:** alignkit is available as a standalone plugin ([alignkit-plugin](https://github.com/mbwsims/alignkit-plugin)) or as part of [Claude Universe](https://github.com/mbwsims/claude-universe-plugin), which combines it with testing, security, codebase, and temporal intelligence in a single install.
+
 You write a CLAUDE.md to control how coding agents work in your codebase. But you have no way to tell if your rules are well-structured, whether the agent actually follows them, or which rules are wasting tokens. alignkit gives you that visibility.
 
 alignkit is currently in beta. It is optimized for Claude Code projects, with broader lint support for related instruction formats such as `AGENTS.md`, `.cursor/rules`, `.claude/agents`, and `.claude/skills`.
