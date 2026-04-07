@@ -39,11 +39,12 @@ server.tool(
   {
     file: z.string().optional().describe('Path to instruction file (auto-discovers if not provided)'),
     since_days: z.number().optional().describe('Analyze sessions from the last N days (defaults to since last file modification)'),
+    sessions_dir: z.string().optional().describe('Path to session directory (default: ~/.claude/projects)'),
   },
   async (args) => {
     try {
       const cwd = process.cwd();
-      const result = checkTool(cwd, args.file, args.since_days);
+      const result = checkTool(cwd, args.file, args.since_days, args.sessions_dir);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
       };

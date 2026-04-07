@@ -92,7 +92,7 @@ function summarizeActions(actions: AgentAction[]): {
   return { bashCommands, writtenFiles, editedFiles };
 }
 
-export function checkTool(cwd: string, file?: string, sinceDays?: number): CheckToolResult {
+export function checkTool(cwd: string, file?: string, sinceDays?: number, sessionsDir?: string): CheckToolResult {
   // 1. Resolve the target file
   let filePath: string;
   let relPath: string;
@@ -130,7 +130,7 @@ export function checkTool(cwd: string, file?: string, sinceDays?: number): Check
   }
 
   // 5. Read sessions
-  const sessions = readSessions({ cwd, since: sinceDate });
+  const sessions = readSessions({ cwd, claudeDir: sessionsDir, since: sinceDate });
 
   // 6. Load history store and process new sessions
   const alignkitDir = path.join(cwd, '.alignkit');

@@ -4,6 +4,7 @@ import { parse as parseJsonc } from 'jsonc-parser';
 
 export interface AlignkitConfig {
   instructionFile?: string;
+  sessionsDir?: string;
   rules?: Record<string, { verifier?: string; check?: string }>;
   thresholds?: {
     tokenBudget?: number;
