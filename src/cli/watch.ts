@@ -4,6 +4,7 @@ import type { Command } from 'commander';
 import { discoverInstructionTargets } from '../parsers/auto-detect.js';
 import { loadEffectiveInstructionGraph } from '../parsers/instruction-loader.js';
 import { readSessions } from '../sessions/session-reader.js';
+import { loadConfig } from '../config/loader.js';
 import { verifySession } from '../verifiers/verifier-engine.js';
 import { ANALYSIS_VERSION } from '../history/analysis-version.js';
 import { HistoryStore } from '../history/store.js';
@@ -80,8 +81,9 @@ export function registerWatchCommand(program: Command): void {
     .command('watch [file]')
     .description('Background daemon that polls for new sessions and appends to history')
     .option('--interval <seconds>', 'Polling interval in seconds', '30')
+    .option('--sessions-dir <dir>', 'Path to session directory (default: ~/.claude/projects)')
     .option('--quiet', 'Suppress per-session output')
-    .action(async (file: string | undefined, options: { interval: string; quiet?: boolean }) => {
+    .action(async (file: string | undefined, options: { interval: string; sessionsDir?: string; quiet?: boolean }) => {
       const cwd = process.cwd();
       const intervalMs = parseInt(options.interval, 10) * 1000;
 
@@ -158,7 +160,9 @@ export function registerWatchCommand(program: Command): void {
           // Read sessions since cursor
           const cursor = readCursor(cursorPath);
           const since = cursor ? new Date(cursor) : undefined;
-          const sessions = readSessions({ cwd, since });
+          const config = loadConfig(cwd);
+          const claudeDir = options.sessionsDir ?? config.sessionsDir;
+          const sessions = readSessions({ cwd, claudeDir, since });
 
           for (const session of sessions) {
             if (store.hasSession(session.sessionId, rulesVersion, ANALYSIS_VERSION)) continue;
